@@ -204,7 +204,21 @@ class AgentManager:
                 logger.info(f"Created REAL ParallelAgent with {len(sub_agents)} sub-agents: {sub_agents}")
                 
             else:
-                # Create regular LLM agent
+                # Create regular LLM agent with optional planner
+                planner_instance = None
+                
+                if planner == "PlanReActPlanner":
+                    from google.adk.planners import PlanReActPlanner
+                    planner_instance = PlanReActPlanner()
+                    logger.info(f"Adding PlanReActPlanner to agent {agent_id}")
+                elif planner == "BuiltInPlanner":
+                    from google.adk.planners import BuiltInPlanner
+                    planner_instance = BuiltInPlanner(
+                        thinking_config=types.ThinkingConfig(include_thoughts=True)
+                    )
+                    logger.info(f"Adding BuiltInPlanner to agent {agent_id}")
+                
+                # Create agent with planner
                 adk_agent = LlmAgent(
                     model=model,
                     name=agent_id,
@@ -212,14 +226,9 @@ class AgentManager:
                     instruction=instruction,
                     tools=agent_tools,
                     generate_content_config=generate_config,
+                    planner=planner_instance,
                     output_key=f"{agent_id}_response"
                 )
-                
-                # Add planner if specified
-                if planner == "PlanReActPlanner":
-                    from google.adk.planners import PlanReActPlanner
-                    adk_agent.planner = PlanReActPlanner()
-                    logger.info(f"Added PlanReActPlanner to agent {agent_id}")
             
             # Store agent
             with self._lock:
