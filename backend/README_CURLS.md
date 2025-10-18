@@ -49,6 +49,7 @@ The server will start at `http://localhost:8000`
 ### Authentication
 
 #### Get JWT Token
+
 ```bash
 curl -X POST "http://localhost:8000/auth/login" \
   -H "Content-Type: application/json" \
@@ -56,6 +57,7 @@ curl -X POST "http://localhost:8000/auth/login" \
 ```
 
 #### Create API Key
+
 ```bash
 curl -X POST "http://localhost:8000/auth/api-keys" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -66,6 +68,7 @@ curl -X POST "http://localhost:8000/auth/api-keys" \
 ### Agent Management
 
 #### Create Agent
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/agents/" \
   -H "X-API-Key: YOUR_API_KEY" \
@@ -89,12 +92,14 @@ curl -X POST "http://localhost:8000/api/v1/agents/" \
 ```
 
 #### List Agents
+
 ```bash
 curl -X GET "http://localhost:8000/api/v1/agents/" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
 #### Get Agent
+
 ```bash
 curl -X GET "http://localhost:8000/api/v1/agents/AGENT_ID" \
   -H "X-API-Key: YOUR_API_KEY"
@@ -103,18 +108,21 @@ curl -X GET "http://localhost:8000/api/v1/agents/AGENT_ID" \
 ### Tool Management
 
 #### List Tools
+
 ```bash
 curl -X GET "http://localhost:8000/api/v1/tools/" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
 #### Get Tool
+
 ```bash
 curl -X GET "http://localhost:8000/api/v1/tools/google_search" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
 #### Enable/Disable Tool
+
 ```bash
 # Enable
 curl -X POST "http://localhost:8000/api/v1/tools/google_search/enable" \
@@ -128,6 +136,7 @@ curl -X POST "http://localhost:8000/api/v1/tools/google_search/disable" \
 ### Memory Management
 
 #### Create Memory
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/memory/" \
   -H "X-API-Key: YOUR_API_KEY" \
@@ -143,6 +152,7 @@ curl -X POST "http://localhost:8000/api/v1/memory/" \
 ```
 
 #### Search Memory
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/memory/search" \
   -H "X-API-Key: YOUR_API_KEY" \
@@ -157,6 +167,7 @@ curl -X POST "http://localhost:8000/api/v1/memory/search" \
 ### Team Management
 
 #### Create Team
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/teams/" \
   -H "X-API-Key: YOUR_API_KEY" \
@@ -170,6 +181,7 @@ curl -X POST "http://localhost:8000/api/v1/teams/" \
 ```
 
 #### List Teams
+
 ```bash
 curl -X GET "http://localhost:8000/api/v1/teams/" \
   -H "X-API-Key: YOUR_API_KEY"
@@ -178,6 +190,7 @@ curl -X GET "http://localhost:8000/api/v1/teams/" \
 ### Conversations
 
 #### Start Conversation
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/conversations/start" \
   -H "X-API-Key: YOUR_API_KEY" \
@@ -190,12 +203,14 @@ curl -X POST "http://localhost:8000/api/v1/conversations/start" \
 ```
 
 #### Get Conversation
+
 ```bash
 curl -X GET "http://localhost:8000/api/v1/conversations/SESSION_ID" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
 #### List User Conversations
+
 ```bash
 curl -X GET "http://localhost:8000/api/v1/conversations/user/USER_ID" \
   -H "X-API-Key: YOUR_API_KEY"
@@ -204,6 +219,7 @@ curl -X GET "http://localhost:8000/api/v1/conversations/user/USER_ID" \
 ### Streaming
 
 #### Send Message with Streaming
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/streaming/send?session_id=SESSION_ID" \
   -H "X-API-Key: YOUR_API_KEY" \
@@ -215,6 +231,7 @@ curl -X POST "http://localhost:8000/api/v1/streaming/send?session_id=SESSION_ID"
 ```
 
 #### Start Streaming Conversation
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/streaming/start" \
   -H "X-API-Key: YOUR_API_KEY" \
@@ -230,24 +247,28 @@ curl -X POST "http://localhost:8000/api/v1/streaming/start" \
 ### Statistics
 
 #### Agent Stats
+
 ```bash
 curl -X GET "http://localhost:8000/api/v1/agents/stats/overview" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
 #### Tool Stats
+
 ```bash
 curl -X GET "http://localhost:8000/api/v1/tools/stats/overview" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
 #### Memory Stats
+
 ```bash
 curl -X GET "http://localhost:8000/api/v1/memory/stats/overview" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
 #### Streaming Stats
+
 ```bash
 curl -X GET "http://localhost:8000/api/v1/streaming/stats/overview" \
   -H "X-API-Key: YOUR_API_KEY"
@@ -258,22 +279,26 @@ curl -X GET "http://localhost:8000/api/v1/streaming/stats/overview" \
 Connect to WebSocket for real-time conversations:
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/api/v1/streaming/ws/SESSION_ID?api_key=YOUR_API_KEY');
+const ws = new WebSocket(
+  "ws://localhost:8000/api/v1/streaming/ws/SESSION_ID?api_key=YOUR_API_KEY"
+);
 
-ws.onopen = function() {
-    console.log('Connected to WebSocket');
-    
-    // Send a message
-    ws.send(JSON.stringify({
-        type: 'message',
-        content: 'Hello from WebSocket!',
-        metadata: {}
-    }));
+ws.onopen = function () {
+  console.log("Connected to WebSocket");
+
+  // Send a message
+  ws.send(
+    JSON.stringify({
+      type: "message",
+      content: "Hello from WebSocket!",
+      metadata: {},
+    })
+  );
 };
 
-ws.onmessage = function(event) {
-    const data = JSON.parse(event.data);
-    console.log('Received:', data);
+ws.onmessage = function (event) {
+  const data = JSON.parse(event.data);
+  console.log("Received:", data);
 };
 ```
 
