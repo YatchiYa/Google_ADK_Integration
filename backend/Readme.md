@@ -7,6 +7,7 @@ This is a comprehensive FastAPI server that provides a complete multi-agent syst
 ## ✨ Key Features
 
 ### 🤖 Agent Management
+
 - **Dynamic Agent Creation**: Create agents with custom personas, configurations, and tools
 - **Team Coordination**: Support for Sequential, Parallel, and Hierarchical agent teams
 - **Real ADK Integration**: Uses genuine Google ADK classes (LlmAgent, SequentialAgent, ParallelAgent)
@@ -14,6 +15,7 @@ This is a comprehensive FastAPI server that provides a complete multi-agent syst
 - **Configuration Management**: Hot-swappable agent configurations and personas
 
 ### 🛠️ Tool Management
+
 - **Dynamic Tool Registry**: Runtime tool registration and management
 - **Built-in Tools**: Google Search, Calculator, Text Analyzer, Web Scraper, etc.
 - **Custom Tool Support**: Easy integration of custom tools
@@ -21,6 +23,7 @@ This is a comprehensive FastAPI server that provides a complete multi-agent syst
 - **Usage Analytics**: Track tool usage and performance
 
 ### 🧠 Memory Management
+
 - **Conversation Persistence**: SQLite-based memory storage
 - **Semantic Search**: Find relevant memories using text matching
 - **Importance Weighting**: Prioritize memories by importance scores
@@ -28,6 +31,7 @@ This is a comprehensive FastAPI server that provides a complete multi-agent syst
 - **User Isolation**: Secure memory separation per user
 
 ### 👥 Team Management
+
 - **Sequential Teams**: Agents execute one after another, passing results forward
 - **Parallel Teams**: Agents work simultaneously, results are combined
 - **Hierarchical Teams**: Coordinator agent manages sub-agents
@@ -35,6 +39,7 @@ This is a comprehensive FastAPI server that provides a complete multi-agent syst
 - **Workflow Execution**: Execute complex multi-agent workflows
 
 ### 💬 Conversation Management
+
 - **Session Management**: Persistent conversation sessions
 - **Message History**: Complete conversation tracking
 - **Context Awareness**: Memory-enhanced conversations
@@ -42,6 +47,7 @@ This is a comprehensive FastAPI server that provides a complete multi-agent syst
 - **Export/Import**: Conversation data portability
 
 ### 🌊 Streaming Support
+
 - **Real-time Responses**: 60fps streaming with Server-Sent Events (SSE)
 - **WebSocket Support**: Bi-directional real-time communication
 - **Optimized Performance**: Batched content delivery and buffering
@@ -49,6 +55,7 @@ This is a comprehensive FastAPI server that provides a complete multi-agent syst
 - **Event Types**: Start, content, tool calls, thinking, completion, errors
 
 ### 🔐 Authentication & Security
+
 - **JWT Tokens**: Secure session-based authentication
 - **API Keys**: Long-term API access with permissions
 - **Multi-client Support**: Isolated user environments
@@ -100,11 +107,13 @@ This is a comprehensive FastAPI server that provides a complete multi-agent syst
 ## 🚀 Getting Started
 
 ### Prerequisites
+
 - Python 3.8+
 - Google API Key (for Gemini models)
 - Optional: OpenAI API Key, Anthropic API Key
 
 ### Quick Setup
+
 ```bash
 cd backend
 chmod +x start_server.sh
@@ -112,6 +121,7 @@ chmod +x start_server.sh
 ```
 
 ### Manual Setup
+
 ```bash
 pip install -r requirements.txt
 cp .env.example .env  # Edit with your API keys
@@ -121,12 +131,14 @@ python main.py
 ## 📊 API Endpoints Overview
 
 ### Authentication (`/auth`)
+
 - `POST /login` - Get JWT token
 - `POST /register` - Register new user
 - `POST /api-keys` - Create API key
 - `GET /api-keys` - List user's API keys
 
 ### Agents (`/api/v1/agents`)
+
 - `POST /` - Create agent
 - `GET /` - List agents
 - `GET /{id}` - Get agent details
@@ -136,6 +148,7 @@ python main.py
 - `GET /stats/overview` - Agent statistics
 
 ### Tools (`/api/v1/tools`)
+
 - `GET /` - List tools
 - `GET /{name}` - Get tool details
 - `POST /{name}/enable` - Enable tool
@@ -144,6 +157,7 @@ python main.py
 - `GET /stats/overview` - Tool statistics
 
 ### Memory (`/api/v1/memory`)
+
 - `POST /` - Create memory
 - `POST /search` - Search memories
 - `GET /user/{id}` - List user memories
@@ -152,6 +166,7 @@ python main.py
 - `GET /stats/overview` - Memory statistics
 
 ### Teams (`/api/v1/teams`)
+
 - `POST /` - Create team
 - `GET /` - List teams
 - `GET /{id}` - Get team details
@@ -160,6 +175,7 @@ python main.py
 - `GET /stats/overview` - Team statistics
 
 ### Conversations (`/api/v1/conversations`)
+
 - `POST /start` - Start conversation
 - `GET /{id}` - Get conversation
 - `GET /user/{id}` - List user conversations
@@ -167,6 +183,7 @@ python main.py
 - `GET /search/{query}` - Search conversations
 
 ### Streaming (`/api/v1/streaming`)
+
 - `POST /send` - Send message (SSE)
 - `POST /start` - Start conversation (SSE)
 - `WS /ws/{id}` - WebSocket connection
@@ -176,6 +193,7 @@ python main.py
 ## 🔧 Configuration
 
 ### Environment Variables
+
 ```env
 GOOGLE_API_KEY=your_google_api_key
 OPENAI_API_KEY=your_openai_api_key  # Optional
@@ -187,6 +205,7 @@ LOG_LEVEL=INFO
 ```
 
 ### Default Settings
+
 - **Default User**: admin / admin123
 - **Database**: SQLite (google_adk.db)
 - **Streaming**: 60fps (16ms intervals)
@@ -196,11 +215,13 @@ LOG_LEVEL=INFO
 ## 🧪 Testing
 
 ### Health Check
+
 ```bash
 curl http://localhost:8000/health
 ```
 
 ### Authentication Test
+
 ```bash
 curl -X POST "http://localhost:8000/auth/login" \
   -H "Content-Type: application/json" \
@@ -208,6 +229,7 @@ curl -X POST "http://localhost:8000/auth/login" \
 ```
 
 ### Agent Creation Test
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/agents/" \
   -H "X-API-Key: YOUR_API_KEY" \
@@ -225,18 +247,21 @@ curl -X POST "http://localhost:8000/api/v1/agents/" \
 ## 📈 Performance Features
 
 ### Streaming Optimizations
+
 - **60fps Rendering**: 16ms update intervals
 - **Content Batching**: Reduces network overhead
 - **Buffer Management**: Smooth content delivery
 - **Connection Pooling**: Efficient resource usage
 
 ### Memory Optimizations
+
 - **SQLite Indexing**: Fast memory searches
 - **Relevance Scoring**: Efficient memory ranking
 - **Automatic Cleanup**: Prevents memory bloat
 - **Pagination Support**: Large dataset handling
 
 ### Caching Strategies
+
 - **Agent Instances**: Cached for reuse
 - **Tool Registry**: In-memory tool storage
 - **Session Management**: Efficient session tracking
@@ -245,12 +270,14 @@ curl -X POST "http://localhost:8000/api/v1/agents/" \
 ## 🔒 Security Features
 
 ### Authentication
+
 - **JWT Tokens**: Secure session management
 - **API Keys**: Long-term access control
 - **Permission System**: Granular access rights
 - **User Isolation**: Secure data separation
 
 ### Data Protection
+
 - **Input Validation**: Pydantic model validation
 - **SQL Injection Prevention**: Parameterized queries
 - **CORS Configuration**: Cross-origin security
@@ -259,8 +286,9 @@ curl -X POST "http://localhost:8000/api/v1/agents/" \
 ## 🚀 Production Deployment
 
 ### Docker Support (Future)
+
 ```dockerfile
-FROM python:3.11-slim
+FROM python:3.12
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY . .
@@ -268,6 +296,7 @@ CMD ["python", "main.py"]
 ```
 
 ### Environment Setup
+
 - Set strong JWT secrets
 - Configure proper CORS origins
 - Enable rate limiting
@@ -296,6 +325,7 @@ MIT License - See LICENSE file for details
 ## 🆘 Support
 
 For issues and questions:
+
 1. Check the documentation
 2. Review CURL examples
 3. Check server logs
