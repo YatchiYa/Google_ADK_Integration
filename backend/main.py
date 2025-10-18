@@ -141,8 +141,9 @@ async def health_check():
 
 
 # Include routers
-from routers import agents, tools, memory, teams, conversations, streaming
+from routers import agents, tools, memory, teams, conversations, streaming, auth
 
+app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(agents.router, prefix="/api/v1/agents", tags=["Agents"])
 app.include_router(tools.router, prefix="/api/v1/tools", tags=["Tools"])
 app.include_router(memory.router, prefix="/api/v1/memory", tags=["Memory"])

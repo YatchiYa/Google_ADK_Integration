@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     
     # Google ADK Configuration
     google_api_key: Optional[str] = Field(default=None, env="GOOGLE_API_KEY")
+    google_genai_use_vertexai: Optional[str] = Field(default="FALSE", env="GOOGLE_GENAI_USE_VERTEXAI")
     gemini_model: str = "gemini-2.0-flash"
     
     # OpenAI Configuration (for LiteLLM)
