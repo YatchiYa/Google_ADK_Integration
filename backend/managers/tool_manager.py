@@ -367,36 +367,16 @@ class ToolManager:
             
             # Register Google ADK built-in tools
             try:
-                # Try to import Google ADK built-in tools
-                try:
-                    from google.adk.tools import google_search as adk_google_search
-                    self.register_tool(
-                        name="google_search",
-                        tool=adk_google_search,
-                        description="Google ADK built-in Google Search tool. Search the web using Google Search grounding.",
-                        category="search",
-                        author="google_adk"
-                    )
-                    logger.info("Registered Google ADK built-in google_search")
-                except ImportError:
-                    # Fallback to our custom implementation
-                    from tools.google_adk_tools import google_search
-                    self.register_tool(
-                        name="google_search",
-                        tool=google_search,
-                        description="Custom Google Search tool. Returns relevant search results with titles, snippets, and URLs.",
-                        category="search",
-                        author="system"
-                    )
-                    logger.info("Registered custom google_search (ADK built-in not available)")
-                
-                # Try to register built-in code execution
-                try:
-                    from google.adk.code_executors import BuiltInCodeExecutor
-                    # Note: Code executor is handled differently, not as a regular tool
-                    logger.info("Google ADK built-in code executor available")
-                except ImportError:
-                    logger.warning("Google ADK built-in code executor not available")
+                # Try to import Google ADK built-in tools 
+                from google.adk.tools import google_search  
+                self.register_tool(
+                    name="google_search",
+                    tool=google_search,
+                    description="Google ADK built-in Google Search tool. Search the web using Google Search grounding.",
+                    category="search",
+                    author="google_adk"
+                )
+                logger.info("Registered Google ADK built-in google_search")
                 
                 # Register our custom tools
                 from tools.google_adk_tools import custom_calculator, text_analyzer

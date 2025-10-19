@@ -173,6 +173,96 @@ class MemoryManager:
             logger.error(f"Failed to get memory entry {entry_id}: {e}")
             return None
     
+    def get_session_context(self,
+                           user_id: str,
+                           session_id: str,
+                           agent_id: Optional[str] = None,
+                           limit: int = 20) -> List[MemoryEntry]:
+        """
+        Get conversation context for a specific session
+        
+        Args:
+            user_id: User identifier
+            session_id: Session identifier
+            agent_id: Optional agent identifier
+            limit: Maximum number of entries
+            
+        Returns:
+            List of memory entries for the session, ordered by creation time
+        """
+        try:
+            sql = "SELECT * FROM memory_entries WHERE user_id = ? AND session_id = ?"
+            params = [user_id, session_id]
+            
+            if agent_id:
+                sql += " AND agent_id = ?"
+                params.append(agent_id)
+            
+            sql += " ORDER BY created_at ASC LIMIT ?"
+            params.append(limit)
+            
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute(sql, params)
+                rows = cursor.fetchall()
+                
+                memories = [self._row_to_memory_entry(row) for row in rows]
+                logger.info(f"Retrieved {len(memories)} session context entries for session {session_id}")
+                return memories
+                
+        except Exception as e:
+            logger.error(f"Failed to get session context: {e}")
+            return []
+    
+    def add_message_to_memory(self,
+                             user_id: str,
+                             session_id: str,
+                             agent_id: str,
+                             role: str,
+                             content: str,
+                             metadata: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Add a message to session memory immediately
+        
+        Args:
+            user_id: User identifier
+            session_id: Session identifier
+            agent_id: Agent identifier
+            role: Message role (user/assistant/system)
+            content: Message content
+            metadata: Optional metadata
+            
+        Returns:
+            str: Memory entry ID
+        """
+        try:
+            # Create memory entry for the message
+            entry_metadata = {
+                "type": "message",
+                "role": role,
+                "session_id": session_id,
+                **(metadata or {})
+            }
+            
+            # Determine importance based on role and content length
+            importance = 0.8 if role == "user" else 0.6
+            if len(content) > 200:
+                importance += 0.1
+            
+            return self.create_memory(
+                user_id=user_id,
+                content=content,
+                session_id=session_id,
+                agent_id=agent_id,
+                metadata=entry_metadata,
+                tags=["message", role, "session"],
+                importance=min(1.0, importance)
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to add message to memory: {e}")
+            raise
+    
     def search_memories(self,
                        user_id: str,
                        query: str,

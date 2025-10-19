@@ -224,30 +224,51 @@ class ConversationManager:
                 metadata=metadata
             )
             
+            # Store user message in memory immediately
+            try:
+                memory_id = self.memory_manager.add_message_to_memory(
+                    user_id=conversation.user_id,
+                    session_id=session_id,
+                    agent_id=conversation.agent_id,
+                    role="user",
+                    content=message,
+                    metadata=metadata
+                )
+                logger.info(f"Stored user message in memory: {memory_id}")
+            except Exception as e:
+                logger.error(f"Failed to store user message in memory: {e}")
+            
             # Get agent
             agent = self.agent_manager.get_agent(conversation.agent_id)
             if not agent:
                 raise ValueError(f"Agent {conversation.agent_id} not found")
             
-            # Prepare context from conversation history
-            context_messages = []
-            for msg in conversation.messages[-10:]:  # Last 10 messages for context
-                context_messages.append(f"{msg.role.value}: {msg.content}")
-            
-            # Get relevant memories
-            memories = self.memory_manager.search_memories(
+            # Get session context (conversation history from memory)
+            session_context = self.memory_manager.get_session_context(
                 user_id=conversation.user_id,
-                query=message,
-                limit=5,
                 session_id=session_id,
-                agent_id=conversation.agent_id
+                agent_id=conversation.agent_id,
+                limit=15
             )
             
-            # Build enhanced message with context
+            logger.info(f"Retrieved {len(session_context)} memory entries for session {session_id}")
+            
+            # Build context from session memory
+            context_messages = []
+            if session_context:
+                for memory in session_context[-10:]:  # Last 10 messages
+                    role = memory.metadata.get('role', 'unknown')
+                    context_messages.append(f"{role}: {memory.content}")
+                logger.info(f"Built context with {len(context_messages)} messages")
+            
+            # Build enhanced message with session context
             enhanced_message = message
-            if memories:
-                memory_context = "\n".join([f"Memory: {m.content}" for m in memories[:3]])
-                enhanced_message = f"Context from previous conversations:\n{memory_context}\n\nCurrent message: {message}"
+            if context_messages:
+                conversation_history = "\n".join(context_messages)
+                enhanced_message = f"Previous conversation in this session:\n{conversation_history}\n\nCurrent message: {message}"
+                logger.info(f"Enhanced message with context: {len(enhanced_message)} chars")
+            else:
+                logger.info("No session context found, using original message")
             
             # Start streaming response
             assistant_content = ""
@@ -273,14 +294,28 @@ class ConversationManager:
                     "message_id": user_message_id
                 }
             
-            # Add assistant response to conversation
+            # Add assistant response to conversation and memory
             if assistant_content.strip():
-                self.add_message(
+                assistant_message_id = self.add_message(
                     session_id=session_id,
                     role=MessageRole.ASSISTANT,
                     content=assistant_content.strip(),
                     metadata={"response_to": user_message_id}
                 )
+                
+                # Store assistant response in memory immediately
+                try:
+                    memory_id = self.memory_manager.add_message_to_memory(
+                        user_id=conversation.user_id,
+                        session_id=session_id,
+                        agent_id=conversation.agent_id,
+                        role="assistant",
+                        content=assistant_content.strip(),
+                        metadata={"response_to": user_message_id}
+                    )
+                    logger.info(f"Stored assistant response in memory: {memory_id}")
+                except Exception as e:
+                    logger.error(f"Failed to store assistant response in memory: {e}")
             
         except Exception as e:
             logger.error(f"Error sending message: {e}")
