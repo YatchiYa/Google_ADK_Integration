@@ -595,10 +595,16 @@ class AgentManager:
         # Build instruction
         instruction = self._build_instruction(agent_info.persona)
         
-        # Get tools (including agent tools)
+        # Get tools (including agent tools and shared memory tools)
         agent_tools = []
         if agent_info.tools:
-            agent_tools = self.tool_manager.get_tools_for_agent(agent_info.tools, agent_manager=self)
+            agent_tools = self.tool_manager.get_tools_for_agent(
+                tool_names=agent_info.tools,
+                agent_manager=self,
+                memory_manager=self.memory_manager,
+                user_id="system",  # Default user for agent creation
+                agent_id=agent_id
+            )
         
         # Create generate content config
         generate_config = types.GenerateContentConfig(

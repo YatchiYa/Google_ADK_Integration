@@ -238,10 +238,62 @@ class ConversationManager:
             except Exception as e:
                 logger.error(f"Failed to store user message in memory: {e}")
             
-            # Get agent
+            # Get agent with updated tools for this user context
             agent = self.agent_manager.get_agent(conversation.agent_id)
             if not agent:
                 raise ValueError(f"Agent {conversation.agent_id} not found")
+            
+            # Create agent with updated tools for this user context
+            agent_info = self.agent_manager._agents.get(conversation.agent_id)
+            if agent_info and agent_info.tools:
+                # Get tools with proper user context for shared memory
+                updated_tools = self.agent_manager.tool_manager.get_tools_for_agent(
+                    tool_names=agent_info.tools,
+                    agent_manager=self.agent_manager,
+                    memory_manager=self.memory_manager,
+                    user_id=conversation.user_id,
+                    agent_id=conversation.agent_id
+                )
+                
+                # Create a new agent instance with updated tools
+                from google.adk.agents import LlmAgent
+                from google.genai import types
+                try:
+                    from google.genai.models import LiteLlm
+                except ImportError:
+                    # Fallback for different ADK versions
+                    LiteLlm = None
+                
+                # Build instruction
+                instruction = self.agent_manager._build_instruction(agent_info.persona)
+                
+                # Create generate content config
+                generate_config = types.GenerateContentConfig(
+                    temperature=agent_info.config.temperature,
+                    max_output_tokens=agent_info.config.max_output_tokens,
+                    top_p=agent_info.config.top_p,
+                    top_k=agent_info.config.top_k,
+                    safety_settings=agent_info.config.safety_settings or []
+                )
+                
+                # Create model
+                if agent_info.config.model.startswith(("openai/", "anthropic/", "ollama/")) and LiteLlm:
+                    model = LiteLlm(model=agent_info.config.model)
+                else:
+                    model = agent_info.config.model
+                
+                # Create new agent instance with updated tools
+                agent = LlmAgent(
+                    model=model,
+                    name=conversation.agent_id,
+                    description=agent_info.persona.description,
+                    instruction=instruction,
+                    tools=updated_tools,
+                    generate_content_config=generate_config,
+                    output_key=f"{conversation.agent_id}_response"
+                )
+                
+                logger.info(f"Created agent instance with {len(updated_tools)} tools for conversation")
             
             # Get session context (conversation history from memory)
             session_context = self.memory_manager.get_session_context(

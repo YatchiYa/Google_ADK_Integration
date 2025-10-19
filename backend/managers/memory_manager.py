@@ -263,6 +263,173 @@ class MemoryManager:
             logger.error(f"Failed to add message to memory: {e}")
             raise
     
+    def create_shared_memory(self,
+                            user_id: str,
+                            content: str,
+                            scope: str = "user",  # "user", "agent", "global"
+                            scope_id: Optional[str] = None,  # agent_id for agent scope
+                            metadata: Optional[Dict[str, Any]] = None,
+                            tags: Optional[List[str]] = None,
+                            importance: float = 1.0) -> str:
+        """
+        Create a shared memory entry with different scopes
+        
+        Args:
+            user_id: User identifier
+            content: Memory content
+            scope: Memory scope ("user", "agent", "global")
+            scope_id: Additional identifier for scope (e.g., agent_id)
+            metadata: Optional metadata
+            tags: Optional tags
+            importance: Importance score
+            
+        Returns:
+            str: Memory entry ID
+        """
+        try:
+            # Create shared memory metadata
+            shared_metadata = {
+                "type": "shared_memory",
+                "scope": scope,
+                "scope_id": scope_id,
+                "shared_at": datetime.now().isoformat(),
+                **(metadata or {})
+            }
+            
+            # Add scope-specific tags
+            shared_tags = ["shared", scope] + (tags or [])
+            if scope_id:
+                shared_tags.append(f"{scope}:{scope_id}")
+            
+            return self.create_memory(
+                user_id=user_id,
+                content=content,
+                session_id=None,  # Shared memories are not session-specific
+                agent_id=scope_id if scope == "agent" else None,
+                metadata=shared_metadata,
+                tags=shared_tags,
+                importance=importance
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to create shared memory: {e}")
+            raise
+    
+    def search_shared_memories(self,
+                              user_id: str,
+                              query: str,
+                              scope: str = "user",
+                              scope_id: Optional[str] = None,
+                              limit: int = 10,
+                              min_relevance: float = 0.5) -> List[MemoryEntry]:
+        """
+        Search shared memories within a specific scope
+        
+        Args:
+            user_id: User identifier
+            query: Search query
+            scope: Memory scope to search
+            scope_id: Scope identifier (e.g., agent_id)
+            limit: Maximum results
+            min_relevance: Minimum relevance score
+            
+        Returns:
+            List of matching shared memory entries
+        """
+        try:
+            # Build search filters
+            sql = "SELECT * FROM memory_entries WHERE user_id = ? AND JSON_EXTRACT(metadata, '$.type') = 'shared_memory'"
+            params = [user_id]
+            
+            # Add scope filter
+            sql += " AND JSON_EXTRACT(metadata, '$.scope') = ?"
+            params.append(scope)
+            
+            # Add scope_id filter if provided
+            if scope_id:
+                sql += " AND JSON_EXTRACT(metadata, '$.scope_id') = ?"
+                params.append(scope_id)
+            
+            # Add text search
+            if query:
+                sql += " AND LOWER(content) LIKE ?"
+                params.append(f"%{query.lower()}%")
+            
+            sql += " ORDER BY importance DESC, created_at DESC LIMIT ?"
+            params.append(limit)
+            
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute(sql, params)
+                rows = cursor.fetchall()
+                
+                memories = []
+                for row in rows:
+                    memory = self._row_to_memory_entry(row)
+                    
+                    # Calculate relevance if query provided
+                    if query:
+                        relevance = self._calculate_relevance(memory.content, query)
+                        if relevance >= min_relevance:
+                            memory.relevance_score = relevance
+                            memories.append(memory)
+                    else:
+                        memory.relevance_score = 1.0
+                        memories.append(memory)
+                
+                # Sort by relevance
+                memories.sort(key=lambda x: (x.relevance_score or 0, x.importance), reverse=True)
+                
+                logger.info(f"Found {len(memories)} shared memories in scope '{scope}'")
+                return memories
+                
+        except Exception as e:
+            logger.error(f"Failed to search shared memories: {e}")
+            return []
+    
+    def get_cross_agent_memories(self,
+                                user_id: str,
+                                agent_ids: List[str],
+                                query: Optional[str] = None,
+                                limit: int = 10) -> List[MemoryEntry]:
+        """
+        Get memories shared across multiple agents
+        
+        Args:
+            user_id: User identifier
+            agent_ids: List of agent IDs to search across
+            query: Optional search query
+            limit: Maximum results
+            
+        Returns:
+            List of cross-agent memories
+        """
+        try:
+            # Search for memories from any of the specified agents
+            placeholders = ",".join(["?" for _ in agent_ids])
+            sql = f"SELECT * FROM memory_entries WHERE user_id = ? AND (agent_id IN ({placeholders}) OR JSON_EXTRACT(metadata, '$.scope') = 'global')"
+            params = [user_id] + agent_ids
+            
+            if query:
+                sql += " AND LOWER(content) LIKE ?"
+                params.append(f"%{query.lower()}%")
+            
+            sql += " ORDER BY importance DESC, created_at DESC LIMIT ?"
+            params.append(limit)
+            
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute(sql, params)
+                rows = cursor.fetchall()
+                
+                memories = [self._row_to_memory_entry(row) for row in rows]
+                logger.info(f"Found {len(memories)} cross-agent memories")
+                return memories
+                
+        except Exception as e:
+            logger.error(f"Failed to get cross-agent memories: {e}")
+            return []
+    
     def search_memories(self,
                        user_id: str,
                        query: str,

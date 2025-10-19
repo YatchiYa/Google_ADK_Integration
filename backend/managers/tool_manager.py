@@ -184,7 +184,10 @@ class ToolManager:
     def get_tools_for_agent(self, 
                           tool_names: List[str],
                           resolve_dependencies: bool = True,
-                          agent_manager=None) -> List[Union[Callable, BaseTool, Type]]:
+                          agent_manager=None,
+                          memory_manager=None,
+                          user_id: Optional[str] = None,
+                          agent_id: Optional[str] = None) -> List[Union[Callable, BaseTool, Type]]:
         """Get tools for an agent with dependency resolution"""
         tools = []
         resolved_names = set()
@@ -195,16 +198,43 @@ class ToolManager:
             
             # Check if it's an agent tool (starts with "agent:")
             if name.startswith("agent:") and agent_manager:
-                agent_id = name[6:]  # Remove "agent:" prefix
+                target_agent_id = name[6:]  # Remove "agent:" prefix
                 try:
                     from utils.agent_tool import create_agent_tool
-                    agent_tool = create_agent_tool(agent_id, agent_manager)
+                    agent_tool = create_agent_tool(target_agent_id, agent_manager)
                     tools.append(agent_tool)
                     resolved_names.add(name)
-                    logger.info(f"Created agent tool for agent {agent_id}")
+                    logger.info(f"Created agent tool for agent {target_agent_id}")
                     return
                 except Exception as e:
-                    logger.error(f"Failed to create agent tool for {agent_id}: {e}")
+                    logger.error(f"Failed to create agent tool for {target_agent_id}: {e}")
+                    return
+            
+            # Check if it's a shared memory tool
+            if name in ["shared_memory", "search_shared_memory", "cross_agent_memory", "session_memory_bridge"]:
+                if memory_manager and user_id and agent_id:
+                    try:
+                        from tools.shared_memory_tools import create_shared_memory_tools
+                        shared_tools = create_shared_memory_tools(memory_manager, user_id, agent_id)
+                        
+                        # Map tool names to functions
+                        tool_map = {
+                            "shared_memory": shared_tools[0],
+                            "search_shared_memory": shared_tools[1], 
+                            "cross_agent_memory": shared_tools[2],
+                            "session_memory_bridge": shared_tools[3]
+                        }
+                        
+                        if name in tool_map:
+                            tools.append(tool_map[name])
+                            resolved_names.add(name)
+                            logger.info(f"Created shared memory tool: {name}")
+                            return
+                    except Exception as e:
+                        logger.error(f"Failed to create shared memory tool {name}: {e}")
+                        return
+                else:
+                    logger.warning(f"Shared memory tool '{name}' requires memory_manager, user_id, and agent_id")
                     return
             
             # Resolve dependencies first
@@ -224,6 +254,7 @@ class ToolManager:
         for name in tool_names:
             resolve_tool(name)
         
+        logger.info(f"Resolved {len(tools)} tools for agent: {', '.join(resolved_names)}")
         return tools
 
     def get_categories(self) -> Dict[str, List[str]]:
@@ -365,7 +396,7 @@ class ToolManager:
                 author="system"
             )
             
-            # Register Google ADK built-in tools
+                # Register Google ADK built-in tools
             try:
                 # Try to import Google ADK built-in tools 
                 from google.adk.tools import google_search  
@@ -383,16 +414,16 @@ class ToolManager:
                 
                 self.register_tool(
                     name="custom_calculator",
-                    tool=custom_calculator,
-                    description="Safe calculator for mathematical expressions. Supports basic arithmetic operations.",
-                    category="utility",
+                        tool=custom_calculator,
+                        description="Safe calculator for mathematical expressions. Supports basic arithmetic operations.",
+                        category="utility",
                     author="system"
                 )
                 
                 self.register_tool(
                     name="text_analyzer",
-                    tool=text_analyzer,
-                    description="Analyze text for word count, sentiment, and other metrics.",
+                        tool=text_analyzer,
+                        description="Analyze text for word count, sentiment, and other metrics.",
                     category="analysis",
                     author="system"
                 )
