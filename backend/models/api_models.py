@@ -5,6 +5,7 @@ Pydantic models for request/response validation
 
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Union
+from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 from enum import Enum
 
@@ -135,6 +136,26 @@ class SearchMemoryRequest(BaseModel):
     tags: List[str] = []
     session_id: Optional[str] = None
     agent_id: Optional[str] = None
+
+
+@dataclass
+class MemoryEntry:
+    """Enhanced memory entry following Google ADK patterns"""
+    entry_id: str
+    user_id: str
+    session_id: Optional[str]
+    agent_id: Optional[str]
+    app_name: Optional[str]  # ADK app_name equivalent
+    content: str
+    memory_type: str  # 'conversation', 'user_info', 'agent_state', 'session_summary'
+    metadata: Dict[str, Any]
+    tags: List[str]
+    importance: float
+    relevance_score: Optional[float] = None
+    event_type: Optional[str] = None  # 'user_message', 'agent_response', 'tool_call', etc.
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
+    last_accessed: Optional[datetime] = None
 
 
 class MemoryEntryResponse(BaseModel):

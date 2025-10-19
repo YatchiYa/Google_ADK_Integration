@@ -16,18 +16,22 @@ from loguru import logger
 
 @dataclass
 class MemoryEntry:
-    """Memory entry data structure"""
+    """Enhanced memory entry data structure following Google ADK patterns"""
     entry_id: str
     user_id: str
     session_id: Optional[str]
     agent_id: Optional[str]
-    content: str
+    app_name: Optional[str] = None
+    content: str = ""
+    memory_type: str = "conversation"
+    event_type: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
     importance: float = 1.0
     relevance_score: Optional[float] = None
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
+    last_accessed: Optional[datetime] = None
 
 
 class MemoryManager:
@@ -54,7 +58,7 @@ class MemoryManager:
         logger.info(f"Memory manager initialized with database: {db_path}")
     
     def _init_database(self):
-        """Initialize SQLite database"""
+        """Initialize SQLite database with enhanced ADK-style schema"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("""
@@ -63,22 +67,27 @@ class MemoryManager:
                         user_id TEXT NOT NULL,
                         session_id TEXT,
                         agent_id TEXT,
+                        app_name TEXT,
                         content TEXT NOT NULL,
+                        memory_type TEXT DEFAULT 'conversation',
+                        event_type TEXT,
                         metadata TEXT,
                         tags TEXT,
-                        importance REAL DEFAULT 1.0,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        importance REAL DEFAULT 0.5,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        last_accessed TEXT
                     )
                 """)
                 
-                # Create indexes for better performance
+                # Create indexes for better search performance
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_user_id ON memory_entries(user_id)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_session_id ON memory_entries(session_id)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_id ON memory_entries(agent_id)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_created_at ON memory_entries(created_at)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_app_name ON memory_entries(app_name)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_memory_type ON memory_entries(memory_type)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_importance ON memory_entries(importance)")
-                
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_created_at ON memory_entries(created_at)")
                 conn.commit()
                 
         except Exception as e:
@@ -90,6 +99,9 @@ class MemoryManager:
                      content: str,
                      session_id: Optional[str] = None,
                      agent_id: Optional[str] = None,
+                     app_name: Optional[str] = None,
+                     memory_type: str = "conversation",
+                     event_type: Optional[str] = None,
                      metadata: Optional[Dict[str, Any]] = None,
                      tags: Optional[List[str]] = None,
                      importance: float = 1.0) -> str:
@@ -117,7 +129,10 @@ class MemoryManager:
                 user_id=user_id,
                 session_id=session_id,
                 agent_id=agent_id,
+                app_name=app_name,
                 content=content,
+                memory_type=memory_type,
+                event_type=event_type,
                 metadata=metadata or {},
                 tags=tags or [],
                 importance=max(0.0, min(1.0, importance))
@@ -128,19 +143,23 @@ class MemoryManager:
                 with sqlite3.connect(self.db_path) as conn:
                     conn.execute("""
                         INSERT INTO memory_entries 
-                        (entry_id, user_id, session_id, agent_id, content, metadata, tags, importance, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (entry_id, user_id, session_id, agent_id, app_name, content, memory_type, event_type, metadata, tags, importance, created_at, updated_at, last_accessed)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         entry.entry_id,
                         entry.user_id,
                         entry.session_id,
                         entry.agent_id,
+                        entry.app_name,
                         entry.content,
+                        entry.memory_type,
+                        entry.event_type,
                         json.dumps(entry.metadata),
                         json.dumps(entry.tags),
                         entry.importance,
                         entry.created_at.isoformat(),
-                        entry.updated_at.isoformat()
+                        entry.updated_at.isoformat(),
+                        None
                     ))
                     conn.commit()
             
@@ -462,12 +481,16 @@ class MemoryManager:
             user_id=row['user_id'],
             session_id=row['session_id'],
             agent_id=row['agent_id'],
+            app_name=row['app_name'] if row['app_name'] else None,
             content=row['content'],
+            memory_type=row['memory_type'] if row['memory_type'] else 'conversation',
+            event_type=row['event_type'] if row['event_type'] else None,
             metadata=json.loads(row['metadata']) if row['metadata'] else {},
             tags=json.loads(row['tags']) if row['tags'] else [],
             importance=row['importance'],
             created_at=datetime.fromisoformat(row['created_at']),
-            updated_at=datetime.fromisoformat(row['updated_at'])
+            updated_at=datetime.fromisoformat(row['updated_at']),
+            last_accessed=datetime.fromisoformat(row['last_accessed']) if row['last_accessed'] else None
         )
     
     def _calculate_relevance(self, content: str, query: str) -> float:

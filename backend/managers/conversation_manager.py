@@ -117,15 +117,34 @@ class ConversationManager:
             with self._lock:
                 self._conversations[session_id] = conversation
             
-            # Store in memory for context
+            # Store in memory for context - ADK style
             if initial_message:
+                # Store session start
                 self.memory_manager.create_memory(
                     user_id=user_id,
-                    content=f"Started conversation with {agent_id}: {initial_message}",
+                    content=f"Session started: {initial_message}",
                     session_id=session_id,
                     agent_id=agent_id,
-                    metadata={"type": "conversation_start"},
+                    app_name="google_adk_multi_agent",
+                    memory_type="session_summary",
+                    event_type="session_start",
+                    metadata={"type": "conversation_start", "agent_name": agent_id},
+                    tags=["session", "start"],
                     importance=0.8
+                )
+                
+                # Store user message separately for better retrieval
+                self.memory_manager.create_memory(
+                    user_id=user_id,
+                    content=initial_message,
+                    session_id=session_id,
+                    agent_id=agent_id,
+                    app_name="google_adk_multi_agent",
+                    memory_type="conversation",
+                    event_type="user_message",
+                    metadata={"role": "user", "is_initial": True},
+                    tags=["user", "message", "initial"],
+                    importance=0.9
                 )
             
             logger.info(f"Started conversation {session_id} between user {user_id} and agent {agent_id}")
@@ -175,18 +194,22 @@ class ConversationManager:
                 conversation.messages.append(message)
                 conversation.updated_at = datetime.now()
                 
-                # Store in memory for context
+                # Store in memory for context - Enhanced ADK style
                 self.memory_manager.create_memory(
                     user_id=conversation.user_id,
-                    content=f"{role.value}: {content}",
+                    content=content,  # Store actual content, not prefixed
                     session_id=session_id,
                     agent_id=conversation.agent_id,
+                    app_name="google_adk_multi_agent",
+                    memory_type="conversation",
+                    event_type=f"{role.value}_message",
                     metadata={
-                        "type": "conversation_message",
                         "role": role.value,
-                        "message_id": message.message_id
+                        "message_id": message.message_id,
+                        "timestamp": message.timestamp.isoformat()
                     },
-                    importance=0.7 if role == MessageRole.USER else 0.6
+                    tags=[role.value, "message", "conversation"],
+                    importance=0.8 if role == MessageRole.USER else 0.7
                 )
                 
                 logger.debug(f"Added {role.value} message to conversation {session_id}")
@@ -234,20 +257,49 @@ class ConversationManager:
             for msg in conversation.messages[-10:]:  # Last 10 messages for context
                 context_messages.append(f"{msg.role.value}: {msg.content}")
             
-            # Get relevant memories
-            memories = self.memory_manager.search_memories(
+            # Build enhanced message with session context - ADK style
+            enhanced_message = message
+            
+            # 1. Current session context (immediate conversation history)
+            session_context = []
+            if len(conversation.messages) > 1:  # More than just the current message
+                for msg in conversation.messages[-5:]:  # Last 5 messages for immediate context
+                    session_context.append(f"{msg.role.value}: {msg.content}")
+            
+            # 2. Cross-session memory (user information and past conversations)
+            cross_session_memories = self.memory_manager.search_memories(
                 user_id=conversation.user_id,
                 query=message,
                 limit=5,
-                session_id=session_id,
-                agent_id=conversation.agent_id
+                min_relevance=0.2
             )
             
-            # Build enhanced message with context
-            enhanced_message = message
-            if memories:
-                memory_context = "\n".join([f"Memory: {m.content}" for m in memories[:3]])
-                enhanced_message = f"Context from previous conversations:\n{memory_context}\n\nCurrent message: {message}"
+            # 3. Session-specific memories (from this session)
+            session_memories = self.memory_manager.search_memories(
+                user_id=conversation.user_id,
+                query="",  # Get all memories from this session
+                session_id=session_id,
+                limit=10,
+                min_relevance=0.0
+            )
+            
+            # Build context
+            context_parts = []
+            
+            # Add current session context
+            if session_context:
+                session_ctx = "\n".join(session_context)
+                context_parts.append(f"CURRENT SESSION HISTORY:\n{session_ctx}")
+            
+            # Add relevant cross-session context
+            if cross_session_memories:
+                cross_ctx = "\n".join([f"• {m.content}" for m in cross_session_memories[:3]])
+                context_parts.append(f"RELEVANT PAST CONTEXT:\n{cross_ctx}")
+            
+            # Combine all context
+            if context_parts:
+                full_context = "\n\n".join(context_parts)
+                enhanced_message = f"CONVERSATION CONTEXT:\n{full_context}\n\n---\n\nUSER MESSAGE: {message}\n\nPlease respond naturally using the context above."
             
             # Start streaming response
             assistant_content = ""
