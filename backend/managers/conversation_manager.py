@@ -87,8 +87,8 @@ class ConversationManager:
             str: Session ID
         """
         try:
-            # Validate agent exists
-            if not self.agent_manager.get_agent_info(agent_id):
+            # Validate agent exists (check both regular agents and team agents)
+            if not self.agent_manager.get_agent(agent_id):
                 raise ValueError(f"Agent {agent_id} not found")
             
             # Generate session ID if not provided

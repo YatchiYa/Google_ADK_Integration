@@ -1,0 +1,16 @@
+{
+  "filename": "animal_drawing.jpg",
+  "timestamp": "2025-10-23T11:44:40.449959",
+  "model_id": "gemini-2.5-flash-image-preview",
+  "prompt": "animal drawing as a human",
+  "generation_type": "text_to_image",
+  "temperature": 0.9,
+  "input_image_path": null,
+  "additional_image_paths": null,
+  "local_path": "generated_images/animal_drawing.jpg",
+  "additional_generated_paths": [],
+  "text_responses": [
+    "Sure! Here is an animal drawing as a human: "
+  ],
+  "total_images_generated": 1
+}

@@ -40,10 +40,16 @@ class ToolManager:
         self._categories: Dict[str, List[str]] = {}
         self._tool_dependencies: Dict[str, List[str]] = {}
         
+        # Debug tracking
+        self._tool_registration_count = 0
+        self._tool_usage_stats = {}
+        
         # Register built-in tools
+        logger.debug("DEBUG: ToolManager.__init__ - Starting built-in tools registration")
         self._register_builtin_tools()
         
         logger.info("Tool registry initialized")
+        logger.debug(f"DEBUG: ToolManager.__init__ - Initialized with {len(self._tools)} tools, {len(self._categories)} categories")
 
     def register_tool(self, 
                      name: str,
@@ -73,19 +79,31 @@ class ToolManager:
             bool: Success status
         """
         try:
+            self._tool_registration_count += 1
+            reg_id = f"reg_{self._tool_registration_count}"
+            
+            logger.debug(f"DEBUG: register_tool ({reg_id}) - Registering tool '{name}'")
+            logger.debug(f"DEBUG: register_tool ({reg_id}) - Tool type: {type(tool)}, Category: {category}")
+            logger.debug(f"DEBUG: register_tool ({reg_id}) - Dependencies: {dependencies}, Force replace: {force_replace}")
+            
             # Check if tool already exists
             if name in self._tools and not force_replace:
+                logger.debug(f"DEBUG: register_tool ({reg_id}) - Tool '{name}' already exists, not replacing")
                 logger.warning(f"Tool '{name}' already exists. Use force_replace=True to override")
                 return False
             
             # Validate tool
+            logger.debug(f"DEBUG: register_tool ({reg_id}) - Validating tool '{name}'")
             if not self._validate_tool(tool):
+                logger.debug(f"DEBUG: register_tool ({reg_id}) - Tool '{name}' validation failed")
                 logger.error(f"Tool '{name}' validation failed")
                 return False
             
             # Extract description if not provided
             if not description:
+                logger.debug(f"DEBUG: register_tool ({reg_id}) - Extracting description for '{name}'")
                 description = self._extract_description(tool)
+                logger.debug(f"DEBUG: register_tool ({reg_id}) - Extracted description: '{description[:100]}...'")
             
             # Create tool info
             tool_info = ToolInfo(
@@ -98,19 +116,35 @@ class ToolManager:
                 metadata=metadata or {}
             )
             
+            logger.debug(f"DEBUG: register_tool ({reg_id}) - Created ToolInfo for '{name}'")
+            
             # Register tool
             self._tools[name] = tool_info
+            logger.debug(f"DEBUG: register_tool ({reg_id}) - Tool '{name}' stored in registry")
             
             # Update category index
             if category not in self._categories:
                 self._categories[category] = []
+                logger.debug(f"DEBUG: register_tool ({reg_id}) - Created new category '{category}'")
             if name not in self._categories[category]:
                 self._categories[category].append(name)
+                logger.debug(f"DEBUG: register_tool ({reg_id}) - Added '{name}' to category '{category}'")
             
             # Register dependencies
             if dependencies:
                 self._tool_dependencies[name] = dependencies
+                logger.debug(f"DEBUG: register_tool ({reg_id}) - Registered dependencies for '{name}': {dependencies}")
             
+            # Update usage stats
+            self._tool_usage_stats[name] = {
+                "registered_at": datetime.now(),
+                "registration_id": reg_id,
+                "category": category,
+                "author": author,
+                "usage_count": 0
+            }
+            
+            logger.debug(f"DEBUG: register_tool ({reg_id}) - Registration complete. Total tools: {len(self._tools)}")
             logger.info(f"Registered tool '{name}' in category '{category}'")
             return True
             
@@ -189,25 +223,63 @@ class ToolManager:
                           user_id: Optional[str] = None,
                           agent_id: Optional[str] = None) -> List[Union[Callable, BaseTool, Type]]:
         """Get tools for an agent with dependency resolution"""
+        logger.debug(f"DEBUG: get_tools_for_agent - Requested tools: {tool_names}")
+        logger.debug(f"DEBUG: get_tools_for_agent - Resolve dependencies: {resolve_dependencies}")
+        logger.debug(f"DEBUG: get_tools_for_agent - Agent manager: {type(agent_manager) if agent_manager else None}")
+        logger.debug(f"DEBUG: get_tools_for_agent - Memory manager: {type(memory_manager) if memory_manager else None}")
+        logger.debug(f"DEBUG: get_tools_for_agent - User ID: {user_id}, Agent ID: {agent_id}")
+        
         tools = []
         resolved_names = set()
+        resolution_order = []
         
         def resolve_tool(name: str):
+            logger.debug(f"DEBUG: resolve_tool - Resolving tool: {name}")
+            
             if name in resolved_names:
+                logger.debug(f"DEBUG: resolve_tool - Tool {name} already resolved, skipping")
                 return
+            
+            resolution_order.append(name)
             
             # Check if it's an agent tool (starts with "agent:")
             if name.startswith("agent:") and agent_manager:
                 target_agent_id = name[6:]  # Remove "agent:" prefix
+                logger.debug(f"DEBUG: resolve_tool - Processing agent tool for agent: {target_agent_id}")
+                
                 try:
-                    from utils.agent_tool import create_agent_tool
-                    agent_tool = create_agent_tool(target_agent_id, agent_manager)
-                    tools.append(agent_tool)
-                    resolved_names.add(name)
-                    logger.info(f"Created agent tool for agent {target_agent_id}")
-                    return
+                    # Use Google ADK AgentTool for proper delegation
+                    from google.adk.tools.agent_tool import AgentTool
+                    logger.debug(f"DEBUG: resolve_tool - Imported Google ADK AgentTool")
+                    
+                    target_agent = agent_manager.get_agent(target_agent_id)
+                    logger.debug(f"DEBUG: resolve_tool - Retrieved target agent: {type(target_agent) if target_agent else None}")
+                    
+                    if target_agent:
+                        agent_tool = AgentTool(agent=target_agent)
+                        tools.append(agent_tool)
+                        resolved_names.add(name)
+                        logger.debug(f"DEBUG: resolve_tool - Created Google ADK AgentTool for agent {target_agent_id}")
+                        logger.info(f"Created Google ADK AgentTool for agent {target_agent_id}")
+                        return
+                    else:
+                        logger.debug(f"DEBUG: resolve_tool - Target agent {target_agent_id} not found")
+                        logger.warning(f"Target agent {target_agent_id} not found for AgentTool")
+                        return
+                except ImportError:
+                    # Fallback to custom agent tool if ADK AgentTool not available
+                    try:
+                        from utils.agent_tool import create_agent_tool
+                        agent_tool = create_agent_tool(target_agent_id, agent_manager)
+                        tools.append(agent_tool)
+                        resolved_names.add(name)
+                        logger.info(f"Created custom agent tool for agent {target_agent_id}")
+                        return
+                    except Exception as e:
+                        logger.error(f"Failed to create agent tool for {target_agent_id}: {e}")
+                        return
                 except Exception as e:
-                    logger.error(f"Failed to create agent tool for {target_agent_id}: {e}")
+                    logger.error(f"Failed to create Google ADK AgentTool for {target_agent_id}: {e}")
                     return
             
             # Check if it's a shared memory tool
@@ -251,8 +323,21 @@ class ToolManager:
                 logger.warning(f"Tool '{name}' not found or disabled")
         
         # Resolve all requested tools
+        logger.debug(f"DEBUG: get_tools_for_agent - Starting resolution of {len(tool_names)} tools")
+        
         for name in tool_names:
+            logger.debug(f"DEBUG: get_tools_for_agent - Processing tool request: {name}")
             resolve_tool(name)
+        
+        # Update usage stats
+        for name in resolved_names:
+            if name in self._tool_usage_stats:
+                self._tool_usage_stats[name]["usage_count"] += 1
+        
+        logger.debug(f"DEBUG: get_tools_for_agent - Resolution complete")
+        logger.debug(f"DEBUG: get_tools_for_agent - Resolution order: {resolution_order}")
+        logger.debug(f"DEBUG: get_tools_for_agent - Resolved tools: {resolved_names}")
+        logger.debug(f"DEBUG: get_tools_for_agent - Tool types: {[type(tool).__name__ for tool in tools]}")
         
         logger.info(f"Resolved {len(tools)} tools for agent: {', '.join(resolved_names)}")
         return tools
@@ -410,25 +495,128 @@ class ToolManager:
                 logger.info("Registered Google ADK built-in google_search")
                 
                 # Register our custom tools
-                from tools.google_adk_tools import custom_calculator, text_analyzer
+                from tools.google_adk_tools import (
+                    custom_calculator, 
+                    text_analyzer,
+                    product_hunt_search,
+                    yahoo_finance_data
+                )
+                
+                # Register Gemini image tools
+                from tools.gemini_image_tool import (
+                    gemini_image_generator,
+                    gemini_text_to_image,
+                    gemini_image_editor
+                )
+                
+                # Register Meta publisher tools
+                from tools.meta_publisher_tool import (
+                    meta_publish_content,
+                    meta_publish_text,
+                    meta_publish_image,
+                    meta_publish_text_and_image,
+                    meta_get_account_info
+                )
                 
                 self.register_tool(
                     name="custom_calculator",
-                        tool=custom_calculator,
-                        description="Safe calculator for mathematical expressions. Supports basic arithmetic operations.",
-                        category="utility",
+                    tool=custom_calculator,
+                    description="Safe calculator for mathematical expressions. Supports basic arithmetic operations.",
+                    category="utility",
                     author="system"
                 )
                 
                 self.register_tool(
                     name="text_analyzer",
-                        tool=text_analyzer,
-                        description="Analyze text for word count, sentiment, and other metrics.",
+                    tool=text_analyzer,
+                    description="Analyze text for word count, sentiment, and other metrics.",
                     category="analysis",
                     author="system"
                 )
                 
-                logger.info("Registered custom tools")
+                self.register_tool(
+                    name="product_hunt_search",
+                    tool=product_hunt_search,
+                    description="Search Product Hunt for products, posts, and collections. Supports query types: search, posts, collections.",
+                    category="api",
+                    author="system"
+                )
+                
+                self.register_tool(
+                    name="yahoo_finance_data",
+                    tool=yahoo_finance_data,
+                    description="Get real-time and historical financial data from Yahoo Finance. Supports stocks, crypto, and other symbols.",
+                    category="finance",
+                    author="system"
+                )
+                
+                # Register Gemini image generation tools
+                self.register_tool(
+                    name="gemini_image_generator",
+                    tool=gemini_image_generator,
+                    description="Advanced image generation and editing using Google Gemini AI. Supports text-to-image, image editing, restoration, colorization, and iterative editing.",
+                    category="ai_image",
+                    author="system"
+                )
+                
+                self.register_tool(
+                    name="gemini_text_to_image",
+                    tool=gemini_text_to_image,
+                    description="Simple text-to-image generation using Google Gemini AI. Generate images from text descriptions.",
+                    category="ai_image",
+                    author="system"
+                )
+                
+                self.register_tool(
+                    name="gemini_image_editor",
+                    tool=gemini_image_editor,
+                    description="Edit existing images using Google Gemini AI. Modify images with text prompts.",
+                    category="ai_image",
+                    author="system"
+                )
+                
+                # Register Meta publisher tools
+                self.register_tool(
+                    name="meta_publish_content",
+                    tool=meta_publish_content,
+                    description="Universal Meta publishing tool for Facebook and Instagram. Supports text, images, and combined content.",
+                    category="social_media",
+                    author="system"
+                )
+                
+                self.register_tool(
+                    name="meta_publish_text",
+                    tool=meta_publish_text,
+                    description="Publish text content to Facebook (Instagram requires images).",
+                    category="social_media",
+                    author="system"
+                )
+                
+                self.register_tool(
+                    name="meta_publish_image",
+                    tool=meta_publish_image,
+                    description="Publish image content to Facebook and Instagram with optional caption.",
+                    category="social_media",
+                    author="system"
+                )
+                
+                self.register_tool(
+                    name="meta_publish_text_and_image",
+                    tool=meta_publish_text_and_image,
+                    description="Publish text with image to Facebook and Instagram.",
+                    category="social_media",
+                    author="system"
+                )
+                
+                self.register_tool(
+                    name="meta_get_account_info",
+                    tool=meta_get_account_info,
+                    description="Get information about configured Meta accounts (Facebook page and Instagram account).",
+                    category="social_media",
+                    author="system"
+                )
+                
+                logger.info("Registered custom tools including Product Hunt, Yahoo Finance, Gemini Image, and Meta Publisher tools")
                 
             except ImportError as e:
                 logger.warning(f"Could not register tools: {e}")

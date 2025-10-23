@@ -1,0 +1,70 @@
+=========================================
+Product Hunt & Yahoo Finance Tool Test
+=========================================
+
+[1/6] Creating Finance Agent...
+✓ Finance Agent: agent_cfcfe657
+
+[2/6] Creating Product Hunt Agent...
+✓ Product Hunt Agent: agent_af14e155
+
+[3/6] Testing Yahoo Finance - Bitcoin (BTC-USD)...
+Starting conversation...
+Session ID: null
+Sending message and streaming response...
+---
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0{"detail":"Conversation not found"}100   157  100    35  100   122  14158  49352 --:--:-- --:--:-- --:--:-- 78500
+
+---
+
+[4/6] Testing Yahoo Finance - Apple Stock (AAPL)...
+Starting conversation...
+Session ID: null
+Sending message and streaming response...
+---
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0{"detail":"Conversation not found"}100   133  100    35  100    98  12977  36336 --:--:-- --:--:-- --:--:-- 66500
+
+---
+
+[5/6] Testing Product Hunt - AI Tools Search...
+Starting conversation...
+Session ID: null
+Sending message and streaming response...
+---
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0{"detail":"Conversation not found"}100   122  100    35  100    87  14925  37100 --:--:-- --:--:-- --:--:-- 61000
+
+---
+
+[6/6] Testing Yahoo Finance - Gold Futures (GC=F)...
+Starting conversation...
+Session ID: null
+Sending message and streaming response...
+---
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0{"detail":"Conversation not found"}100   130  100    35  100    95   7528  20434 --:--:-- --:--:-- --:--:-- 32500
+
+---
+
+=========================================
+✓ All Tests Complete!
+=========================================
+
+Agents Created:
+  - Finance Expert: agent_cfcfe657
+  - Product Hunter: agent_af14e155
+
+Tools Tested:
+  ✓ yahoo_finance_data (BTC-USD, AAPL, GC=F)
+  ✓ product_hunt_search (AI tools)
+
+Check server logs for tool execution:
+  grep 'Fetching Yahoo Finance' logs
+  grep 'Product Hunt' logs
+

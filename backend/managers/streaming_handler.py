@@ -87,7 +87,15 @@ class StreamingHandler:
         self._content_buffers: Dict[str, List[str]] = {}
         self._last_flush_time: Dict[str, float] = {}
         
+        # Track accumulated content to prevent duplicates
+        self._accumulated_content: Dict[str, str] = {}
+        
+        # Debug tracking
+        self._chunk_counters: Dict[str, int] = {}
+        self._event_counters: Dict[str, int] = {}
+        
         logger.info(f"Streaming handler initialized (interval: {update_interval_ms}ms, batch: {batch_size})")
+        logger.debug(f"DEBUG: StreamingHandler.__init__ - Full config: update_interval={self.update_interval}s, batch_size={self.batch_size}, buffer_timeout={self.buffer_timeout}s")
 
     async def start_streaming_session(self, session_id: str, agent_id: str, user_id: str, 
                                      agent, message: str) -> AsyncGenerator[StreamingEvent, None]:
@@ -106,6 +114,9 @@ class StreamingHandler:
         """
         start_time = time.time()
         
+        logger.debug(f"DEBUG: start_streaming_session - Starting session {session_id} for agent {agent_id}, user {user_id}")
+        logger.debug(f"DEBUG: start_streaming_session - Message length: {len(message)}, Agent type: {type(agent)}")
+        
         try:
             # Create streaming session
             streaming_session = StreamingSession(
@@ -115,6 +126,11 @@ class StreamingHandler:
             )
             
             self._active_sessions[session_id] = streaming_session
+            self._accumulated_content[session_id] = ""  # Initialize content tracking
+            self._chunk_counters[session_id] = 0
+            self._event_counters[session_id] = 0
+            
+            logger.debug(f"DEBUG: start_streaming_session - Session {session_id} initialized, active sessions: {len(self._active_sessions)}")
             
             # Send start event
             yield StreamingEvent(
@@ -130,22 +146,28 @@ class StreamingHandler:
             
             # Create session service and runner with proper streaming config
             session_service = InMemorySessionService()
+            logger.debug(f"DEBUG: ADK Setup - Created InMemorySessionService: {type(session_service)}")
+            
             runner = Runner(
                 app_name="adk_streaming",
                 agent=agent,
                 session_service=session_service
             )
+            logger.debug(f"DEBUG: ADK Setup - Created Runner: {type(runner)}, agent: {type(agent)}")
             
             # Create session
             session = await session_service.create_session(
                 app_name="adk_streaming",
                 user_id=user_id
             )
+            logger.debug(f"DEBUG: ADK Setup - Created session: {session.id}, user_id: {user_id}")
             
             # Configure streaming
             run_config = RunConfig(streaming_mode=StreamingMode.SSE)
+            logger.debug(f"DEBUG: ADK Setup - RunConfig created with streaming_mode: {run_config.streaming_mode}")
             
             logger.info(f"Starting ADK streaming for session {session_id}")
+            logger.debug(f"DEBUG: ADK Setup - About to start runner.run_async with session_id: {session.id}")
             
             # Run with proper ADK streaming
             async for event in runner.run_async(
@@ -155,10 +177,30 @@ class StreamingHandler:
                 run_config=run_config
             ):
                 streaming_session.last_activity = datetime.now()
+                self._event_counters[session_id] += 1
+                
+                # DEBUG: Full event inspection
+                # logger.debug(f"DEBUG: Event #{self._event_counters[session_id]} - Type: {type(event)}")
+                # logger.debug(f"DEBUG: Event #{self._event_counters[session_id]} - Dir: {[attr for attr in dir(event) if not attr.startswith('_')]}")
+                
+                # Check all available attributes
+                event_attrs = {}
+                for attr in dir(event):
+                    if not attr.startswith('_'):
+                        try:
+                            value = getattr(event, attr)
+                            if not callable(value):
+                                event_attrs[attr] = str(value)[:200] if isinstance(value, str) else str(type(value))
+                        except Exception as e:
+                            event_attrs[attr] = f"Error accessing: {e}"
+                
+                # logger.debug(f"DEBUG: Event #{self._event_counters[session_id]} - Attributes: {event_attrs}")
                 
                 # Handle ADK streaming events
                 event_processed = False
                 
+                print("== ==== > : ", event)
+                # print("== ==== > [event_type]: |", event.event_type, "|")
                 # Handle sub-agent start events
                 if hasattr(event, 'event_type') and event.event_type == 'sub_agent_start':
                     yield StreamingEvent(
@@ -240,9 +282,45 @@ class StreamingHandler:
                 
                 # Process content parts
                 if hasattr(event, 'content') and event.content and hasattr(event.content, 'parts') and not event_processed:
+                    # logger.debug(f"DEBUG: Content Processing - Event has content with {len(event.content.parts)} parts")
+                    # logger.debug(f"DEBUG: Content Processing - Content type: {type(event.content)}")
+                    
                     has_content = False
                     
-                    for part in event.content.parts:
+                    for part_idx, part in enumerate(event.content.parts):
+                        self._chunk_counters[session_id] += 1
+                        chunk_id = f"{session_id}_chunk_{self._chunk_counters[session_id]}"
+                        
+                        # DEBUG: Full part inspection
+                        # logger.debug(f"DEBUG: Part #{part_idx} (chunk_id: {chunk_id}) - Type: {type(part)}")
+                        # logger.debug(f"DEBUG: Part #{part_idx} (chunk_id: {chunk_id}) - Dir: {[attr for attr in dir(part) if not attr.startswith('_')]}")
+                        
+                        # Check all available part attributes
+                        part_attrs = {}
+                        for attr in dir(part):
+                            if not attr.startswith('_'):
+                                try:
+                                    value = getattr(part, attr)
+                                    if not callable(value):
+                                        if attr == 'text' and isinstance(value, str):
+                                            part_attrs[attr] = f"'{value[:100]}...' (len={len(value)})" if len(value) > 100 else f"'{value}'"
+                                        else:
+                                            part_attrs[attr] = str(value)[:100] if isinstance(value, str) else str(type(value))
+                                except Exception as e:
+                                    part_attrs[attr] = f"Error accessing: {e}"
+                        
+                        # logger.debug(f"DEBUG: Part #{part_idx} (chunk_id: {chunk_id}) - Attributes: {part_attrs}")
+                        
+                        # Check hasattr for common attributes
+                        hasattr_checks = {
+                            'text': hasattr(part, 'text'),
+                            'function_call': hasattr(part, 'function_call'),
+                            'function_response': hasattr(part, 'function_response'),
+                            'data': hasattr(part, 'data'),
+                            'mime_type': hasattr(part, 'mime_type'),
+                            'content': hasattr(part, 'content')
+                        }
+                        # logger.debug(f"DEBUG: Part #{part_idx} (chunk_id: {chunk_id}) - hasattr checks: {hasattr_checks}")
                         # Check for function calls first
                         if hasattr(part, 'function_call') and part.function_call:
                             tool_call_event = StreamingEvent(
@@ -260,6 +338,20 @@ class StreamingHandler:
                         
                         # Check for function responses
                         elif hasattr(part, 'function_response') and part.function_response:
+                            # Parse tool response for better display
+                            tool_result = {}
+                            if hasattr(part.function_response, 'response') and part.function_response.response:
+                                try:
+                                    # Try to parse JSON result
+                                    if 'result' in part.function_response.response:
+                                        import json
+                                        result_str = part.function_response.response['result']
+                                        if isinstance(result_str, str) and result_str.strip().startswith('{'):
+                                            tool_result = json.loads(result_str)
+                                except Exception as e:
+                                    logger.debug(f"Could not parse tool result as JSON: {e}")
+                                    tool_result = part.function_response.response
+                            
                             tool_response_event = StreamingEvent(
                                 type=StreamingEventType.TOOL_RESPONSE,
                                 content=f"✅ Tool '{part.function_response.name}' completed",
@@ -267,15 +359,61 @@ class StreamingHandler:
                                 agent_id=agent_id,
                                 metadata={
                                     "tool_name": part.function_response.name,
-                                    "response_id": getattr(part.function_response, 'id', 'unknown')
+                                    "response_id": getattr(part.function_response, 'id', 'unknown'),
+                                    "tool_result": tool_result,
+                                    "raw_response": part.function_response.response if hasattr(part.function_response, 'response') else {}
                                 }
                             )
                             yield tool_response_event
                         
                         # Handle text content
                         elif part.text and part.text.strip():
+                            # logger.debug(f"DEBUG: Text Content (chunk_id: {chunk_id}) - Length: {len(part.text)}, First 100 chars: '{part.text[:100]}'")
+                            print("==================== TEXT CONTENT ==================== :", part.text)
+                            # Check ADK event properties
+                            current_accumulated = self._accumulated_content[session_id]
+                            is_partial = getattr(event, 'partial', None)
+                            is_final_response = hasattr(event, 'is_final_response') and callable(event.is_final_response) and event.is_final_response()
+                            
+                            # logger.debug(f"DEBUG: ADK Event Analysis (chunk_id: {chunk_id}) - partial: {is_partial}, is_final_response: {is_final_response}, text_len: {len(part.text)}, accumulated_len: {len(current_accumulated)}")
+                            
+                            # Skip final response events that contain accumulated content
+                            if is_final_response and current_accumulated:
+                                # Check if this final response is a duplicate of accumulated content
+                                if (part.text.strip() == current_accumulated.strip() or 
+                                    (len(part.text) >= len(current_accumulated) * 0.8 and 
+                                     current_accumulated.strip() in part.text.strip())):
+                                    logger.debug(f"DEBUG: SKIPPING final response duplicate for session {session_id} (chunk_id: {chunk_id}, is_final_response: True)")
+                                    continue
+                            
+                            # Skip non-partial events that duplicate accumulated content (fallback)
+                            if (not is_partial and current_accumulated and 
+                                len(part.text) >= len(current_accumulated) * 0.8 and
+                                current_accumulated.strip() in part.text.strip()):
+                                logger.debug(f"DEBUG: SKIPPING non-partial duplicate for session {session_id} (chunk_id: {chunk_id}, partial: {is_partial})")
+                                continue
+                            
+                            # Skip exact duplicates
+                            if current_accumulated and part.text.strip() == current_accumulated.strip():
+                                logger.debug(f"DEBUG: SKIPPING exact duplicate for session {session_id} (chunk_id: {chunk_id})")
+                                continue
+                            
                             streaming_session.events_sent += 1
                             has_content = True
+                            
+                            # Update accumulated content only for streaming chunks (partial events or first chunk)
+                            old_accumulated_len = len(self._accumulated_content[session_id])
+                            
+                            # Only accumulate if this is a partial event or we have no accumulated content yet
+                            if is_partial or old_accumulated_len == 0:
+                                self._accumulated_content[session_id] += part.text
+                                logger.debug(f"DEBUG: Content Accumulated (chunk_id: {chunk_id}) - Added {len(part.text)} chars")
+                            else:
+                                # For non-partial events, don't accumulate to avoid duplication
+                                logger.debug(f"DEBUG: Content Not Accumulated (chunk_id: {chunk_id}) - Non-partial event, skipping accumulation")
+                            
+                            new_accumulated_len = len(self._accumulated_content[session_id])
+                            logger.debug(f"DEBUG: Content Update (chunk_id: {chunk_id}) - Accumulated length: {old_accumulated_len} -> {new_accumulated_len}")
                             
                             # Check if this is from a sub-agent
                             sub_agent_info = {}
@@ -284,23 +422,35 @@ class StreamingHandler:
                                     "sub_agent_name": event.agent_name,
                                     "is_sub_agent": True
                                 }
+                                logger.debug(f"DEBUG: Sub-agent detected (chunk_id: {chunk_id}) - Agent: {event.agent_name}")
                             elif hasattr(event, 'source') and event.source:
                                 sub_agent_info = {
                                     "sub_agent_name": event.source,
                                     "is_sub_agent": True
                                 }
+                                logger.debug(f"DEBUG: Sub-agent source detected (chunk_id: {chunk_id}) - Source: {event.source}")
+                            
+                            content_metadata = {
+                                "event_count": streaming_session.events_sent,
+                                "chunk_size": len(part.text),
+                                "chunk_id": chunk_id,
+                                "part_index": part_idx,
+                                "accumulated_size": new_accumulated_len,
+                                "is_streaming": True,
+                                "is_partial": is_partial,
+                                "is_final_response": is_final_response,
+                                "adk_event_id": getattr(event, 'id', 'unknown'),
+                                **sub_agent_info
+                            }
+                            
+                            logger.debug(f"DEBUG: Yielding Content Event (chunk_id: {chunk_id}) - Metadata: {content_metadata}")
                             
                             yield StreamingEvent(
                                 type=StreamingEventType.CONTENT,
                                 content=part.text,
                                 session_id=session_id,
                                 agent_id=agent_id,
-                                metadata={
-                                    "event_count": streaming_session.events_sent,
-                                    "chunk_size": len(part.text),
-                                    "is_streaming": True,
-                                    **sub_agent_info
-                                }
+                                metadata=content_metadata
                             )
                     
                     if has_content:
@@ -330,7 +480,22 @@ class StreamingHandler:
         
         finally:
             # Cleanup session
+            logger.debug(f"DEBUG: Cleanup - Starting cleanup for session {session_id}")
+            logger.debug(f"DEBUG: Cleanup - Final stats - Events: {self._event_counters.get(session_id, 0)}, Chunks: {self._chunk_counters.get(session_id, 0)}")
+            
             self._cleanup_session(session_id)
+            
+            # Clean up accumulated content tracking
+            if session_id in self._accumulated_content:
+                final_content_len = len(self._accumulated_content[session_id])
+                logger.debug(f"DEBUG: Cleanup - Final accumulated content length: {final_content_len}")
+                del self._accumulated_content[session_id]
+            
+            # Clean up debug counters
+            self._chunk_counters.pop(session_id, None)
+            self._event_counters.pop(session_id, None)
+            
+            logger.debug(f"DEBUG: Cleanup - Session {session_id} cleanup complete")
 
     async def stream_to_sse(self,
                           session_id: str,

@@ -1,0 +1,16 @@
+{
+  "filename": "kid_drawing.jpg",
+  "timestamp": "2025-10-23T11:44:29.413831",
+  "model_id": "gemini-2.5-flash-image-preview",
+  "prompt": "kid drawing",
+  "generation_type": "text_to_image",
+  "temperature": 0.9,
+  "input_image_path": null,
+  "additional_image_paths": null,
+  "local_path": "generated_images/kid_drawing.jpg",
+  "additional_generated_paths": [],
+  "text_responses": [
+    "Here's an image of a kid drawing! "
+  ],
+  "total_images_generated": 1
+}

@@ -1,0 +1,16 @@
+{
+  "filename": "gemini_text_to_image_20251023_104535.png",
+  "timestamp": "2025-10-23T10:45:35.335701",
+  "model_id": "gemini-2.5-flash-image-preview",
+  "prompt": "garden japanes image",
+  "generation_type": "text_to_image",
+  "temperature": 1,
+  "input_image_path": null,
+  "additional_image_paths": null,
+  "local_path": "generated_images/gemini_text_to_image_20251023_104535.png",
+  "additional_generated_paths": [],
+  "text_responses": [
+    "Certainly, here is a Japanese garden: "
+  ],
+  "total_images_generated": 1
+}

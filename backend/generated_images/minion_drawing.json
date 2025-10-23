@@ -1,0 +1,16 @@
+{
+  "filename": "minion_drawing.jpg",
+  "timestamp": "2025-10-23T11:44:22.793396",
+  "model_id": "gemini-2.5-flash-image-preview",
+  "prompt": "minion drawing",
+  "generation_type": "text_to_image",
+  "temperature": 0.9,
+  "input_image_path": null,
+  "additional_image_paths": null,
+  "local_path": "generated_images/minion_drawing.jpg",
+  "additional_generated_paths": [],
+  "text_responses": [
+    "Here's a drawing of a minion for you! "
+  ],
+  "total_images_generated": 1
+}

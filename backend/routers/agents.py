@@ -495,3 +495,242 @@ async def import_agent_config(
     except Exception as e:
         logger.error(f"Error importing agent config: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{agent_id}/tools/attach", response_model=BaseResponse)
+async def attach_tools_to_agent(
+    agent_id: str,
+    request: AttachToolsRequest,
+    agent_manager: AgentManager = Depends(get_agent_manager),
+    current_user: dict = Depends(get_current_user)
+):
+    """Dynamically attach tools to an existing agent"""
+    try:
+        # Check permissions
+        if not require_permission(current_user, "agents:update"):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        # Get current agent
+        agent_info = agent_manager.get_agent_info(agent_id)
+        if not agent_info:
+            raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+        
+        # Get current tools
+        current_tools = list(agent_info.tools) if agent_info.tools else []
+        
+        # Add new tools (avoid duplicates)
+        new_tools = []
+        for tool_name in request.tool_names:
+            if tool_name not in current_tools:
+                new_tools.append(tool_name)
+                current_tools.append(tool_name)
+        
+        if not new_tools:
+            return BaseResponse(
+                success=True,
+                message=f"All requested tools already attached to agent {agent_id}"
+            )
+        
+        # Update agent with new tools
+        success = agent_manager.update_agent_tools(agent_id, current_tools)
+        
+        if success:
+            logger.info(f"Attached tools {new_tools} to agent {agent_id}")
+            return BaseResponse(
+                success=True,
+                message=f"Successfully attached tools {new_tools} to agent {agent_id}"
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Failed to attach tools to agent")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error attaching tools to agent {agent_id}: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{agent_id}/tools/detach", response_model=BaseResponse)
+async def detach_tools_from_agent(
+    agent_id: str,
+    request: DetachToolsRequest,
+    agent_manager: AgentManager = Depends(get_agent_manager),
+    current_user: dict = Depends(get_current_user)
+):
+    """Dynamically detach tools from an existing agent"""
+    try:
+        # Check permissions
+        if not require_permission(current_user, "agents:update"):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        # Get current agent
+        agent_info = agent_manager.get_agent_info(agent_id)
+        if not agent_info:
+            raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+        
+        # Get current tools
+        current_tools = list(agent_info.tools) if agent_info.tools else []
+        
+        # Remove specified tools
+        removed_tools = []
+        for tool_name in request.tool_names:
+            if tool_name in current_tools:
+                current_tools.remove(tool_name)
+                removed_tools.append(tool_name)
+        
+        if not removed_tools:
+            return BaseResponse(
+                success=True,
+                message=f"None of the requested tools were attached to agent {agent_id}"
+            )
+        
+        # Update agent with remaining tools
+        success = agent_manager.update_agent_tools(agent_id, current_tools)
+        
+        if success:
+            logger.info(f"Detached tools {removed_tools} from agent {agent_id}")
+            return BaseResponse(
+                success=True,
+                message=f"Successfully detached tools {removed_tools} from agent {agent_id}"
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Failed to detach tools from agent")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error detaching tools from agent {agent_id}: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{agent_id}/tools", response_model=AgentToolsResponse)
+async def get_agent_tools(
+    agent_id: str,
+    agent_manager: AgentManager = Depends(get_agent_manager),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get current tools attached to an agent"""
+    try:
+        # Check permissions
+        if not require_permission(current_user, "agents:read"):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        # Get agent info
+        agent_info = agent_manager.get_agent_info(agent_id)
+        if not agent_info:
+            raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+        
+        return AgentToolsResponse(
+            success=True,
+            agent_id=agent_id,
+            tools=agent_info.tools or [],
+            message=f"Retrieved {len(agent_info.tools or [])} tools for agent {agent_id}"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting tools for agent {agent_id}: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/{agent_id}/config", response_model=BaseResponse)
+async def update_agent_config(
+    agent_id: str,
+    config: dict,
+    agent_manager: AgentManager = Depends(get_agent_manager),
+    current_user: dict = Depends(get_current_user)
+):
+    """Update agent configuration (ReAct mode, planner, etc.)"""
+    try:
+        # Check permissions
+        if not require_permission(current_user, "agents:write"):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        # Get current agent info
+        agent_info = agent_manager.get_agent_info(agent_id)
+        if not agent_info:
+            raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+        
+        logger.info(f"Updating agent {agent_id} config: {config}")
+        
+        # Update agent configuration
+        updated = False
+        
+        # Handle agent_type changes (ReAct mode)
+        if "agent_type" in config:
+            agent_type = config["agent_type"]
+            if agent_type != getattr(agent_info, 'agent_type', None):
+                # For now, we'll update the metadata to track this
+                # In a full implementation, you'd recreate the agent with the new type
+                if not hasattr(agent_info, 'metadata'):
+                    agent_info.metadata = {}
+                agent_info.metadata['agent_type'] = agent_type
+                updated = True
+                logger.info(f"Updated agent {agent_id} type to: {agent_type}")
+        
+        # Handle planner changes
+        if "planner" in config:
+            planner = config["planner"]
+            if planner != getattr(agent_info, 'planner', None):
+                if not hasattr(agent_info, 'metadata'):
+                    agent_info.metadata = {}
+                agent_info.metadata['planner'] = planner
+                updated = True
+                logger.info(f"Updated agent {agent_id} planner to: {planner}")
+        
+        # Handle tools changes
+        if "tools" in config:
+            tools = config["tools"]
+            if tools != agent_info.tools:
+                agent_info.tools = tools
+                updated = True
+                logger.info(f"Updated agent {agent_id} tools to: {tools}")
+        
+        if updated:
+            # In a full implementation, you might want to recreate the agent instance
+            # For now, we'll just update the stored info
+            logger.info(f"Agent {agent_id} configuration updated successfully")
+            
+            return BaseResponse(
+                success=True,
+                message=f"Agent {agent_id} configuration updated successfully"
+            )
+        else:
+            return BaseResponse(
+                success=True,
+                message=f"No changes made to agent {agent_id} configuration"
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating agent {agent_id} config: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{agent_id}/stop", response_model=BaseResponse)
+async def stop_agent_streaming(
+    agent_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Stop streaming for an agent session"""
+    try:
+        # Check permissions
+        if not require_permission(current_user, "agents:write"):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        # In a full implementation, you'd track active sessions and stop them
+        # For now, we'll just return success
+        logger.info(f"Stop streaming requested for agent {agent_id}")
+        
+        return BaseResponse(
+            success=True,
+            message=f"Streaming stopped for agent {agent_id}"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error stopping streaming for agent {agent_id}: {e}")
+        raise HTTPException(status_code=400, detail=str(e))

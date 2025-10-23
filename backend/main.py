@@ -34,6 +34,15 @@ from config.settings import Settings
 # Global managers
 managers: Dict[str, Any] = {}
 
+# Global manager instances for router access
+agent_manager = None
+tool_manager = None
+memory_manager = None
+team_manager = None
+conversation_manager = None
+streaming_handler = None
+auth_manager = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,6 +56,9 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing managers...")
     
     # Core managers
+    global agent_manager, tool_manager, memory_manager, team_manager
+    global conversation_manager, streaming_handler, auth_manager
+    
     tool_manager = ToolManager()
     memory_manager = MemoryManager()
     agent_manager = AgentManager(tool_manager, memory_manager)
@@ -141,7 +153,7 @@ async def health_check():
 
 
 # Include routers
-from routers import agents, tools, memory, teams, conversations, streaming, auth
+from routers import agents, tools, memory, teams, conversations, streaming, auth, images
 
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(agents.router, prefix="/api/v1/agents", tags=["Agents"])
@@ -150,6 +162,7 @@ app.include_router(memory.router, prefix="/api/v1/memory", tags=["Memory"])
 app.include_router(teams.router, prefix="/api/v1/teams", tags=["Teams"])
 app.include_router(conversations.router, prefix="/api/v1/conversations", tags=["Conversations"])
 app.include_router(streaming.router, prefix="/api/v1/streaming", tags=["Streaming"])
+app.include_router(images.router, tags=["Images"])
 
 
 @app.get("/")
@@ -166,7 +179,8 @@ async def root():
             "memory": "/api/v1/memory", 
             "teams": "/api/v1/teams",
             "conversations": "/api/v1/conversations",
-            "streaming": "/api/v1/streaming"
+            "streaming": "/api/v1/streaming",
+            "images": "/api/v1/images"
         }
     }
 

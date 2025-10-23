@@ -159,7 +159,7 @@ SIMPLE_AGENT_MESSAGE=$(extract_json "$SIMPLE_AGENT_RESPONSE" ".message")
 
 if [ "$SIMPLE_AGENT_SUCCESS" = "true" ]; then
     check_result "Simple Agent Creation"
-    SIMPLE_AGENT_ID=$(echo "$SIMPLE_AGENT_MESSAGE" | grep -o 'agent_[a-f0-9]*' | head -1)
+    SIMPLE_AGENT_ID=$(echo "$SIMPLE_AGENT_MESSAGE" | grep -o 'agent_[a-f0-9]*'  )
     echo "Agent ID: $SIMPLE_AGENT_ID"
 else
     echo "❌ Failed to create simple agent"
@@ -200,7 +200,7 @@ RESEARCH_AGENT_MESSAGE=$(extract_json "$RESEARCH_AGENT_RESPONSE" ".message")
 
 if [ "$RESEARCH_AGENT_SUCCESS" = "true" ]; then
     check_result "Research Agent with Tools Creation"
-    RESEARCH_AGENT_ID=$(echo "$RESEARCH_AGENT_MESSAGE" | grep -o 'agent_[a-f0-9]*' | head -1)
+    RESEARCH_AGENT_ID=$(echo "$RESEARCH_AGENT_MESSAGE" | grep -o 'agent_[a-f0-9]*' )
     echo "Agent ID: $RESEARCH_AGENT_ID"
 else
     echo "❌ Failed to create research agent"
@@ -251,7 +251,7 @@ CONVERSATION_MESSAGE=$(extract_json "$CONVERSATION_RESPONSE" ".message")
 
 if [ "$CONVERSATION_SUCCESS" = "true" ]; then
     check_result "Start Conversation"
-    SESSION_ID=$(echo "$CONVERSATION_MESSAGE" | grep -o 'session_[a-f0-9]*' | head -1)
+    SESSION_ID=$(echo "$CONVERSATION_MESSAGE" | grep -o 'session_[a-f0-9]*' )
     echo "Session ID: $SESSION_ID"
 else
     echo "❌ Failed to start conversation"
@@ -272,7 +272,7 @@ STREAMING_OUTPUT=$(curl -s -X POST "http://localhost:8000/api/v1/streaming/send?
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -d '{"message": "What is 2 + 2?"}' \
-  --no-buffer | head -10)
+  --no-buffer  )
 
 echo "$STREAMING_OUTPUT"
 
@@ -298,7 +298,7 @@ RESEARCH_CONVERSATION_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/v1/c
     \"message\": \"Can you search for information about AI trends?\"
   }")
 
-RESEARCH_SESSION_ID=$(extract_json "$RESEARCH_CONVERSATION_RESPONSE" ".message" | grep -o 'session_[a-f0-9]*' | head -1)
+RESEARCH_SESSION_ID=$(extract_json "$RESEARCH_CONVERSATION_RESPONSE" ".message" | grep -o 'session_[a-f0-9]*' )
 
 echo "Request: POST /api/v1/streaming/send?session_id=$RESEARCH_SESSION_ID"
 echo "Message: Please use your search tools to find the latest AI trends"
@@ -309,7 +309,7 @@ RESEARCH_STREAMING_OUTPUT=$(curl -s -X POST "http://localhost:8000/api/v1/stream
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -d '{"message": "Please use your search tools to find the latest AI trends"}' \
-  --no-buffer | head -15)
+  --no-buffer )
 
 echo "$RESEARCH_STREAMING_OUTPUT"
 
@@ -345,7 +345,7 @@ TEAM_MESSAGE=$(extract_json "$TEAM_RESPONSE" ".message")
 
 if [ "$TEAM_SUCCESS" = "true" ]; then
     check_result "Create Team"
-    TEAM_ID=$(echo "$TEAM_MESSAGE" | grep -o 'team_[a-f0-9]*' | head -1)
+    TEAM_ID=$(echo "$TEAM_MESSAGE" | grep -o 'team_[a-f0-9]*' )
     echo "Team ID: $TEAM_ID"
 else
     echo "❌ Failed to create team"
@@ -401,7 +401,7 @@ MEMORY_SUCCESS=$(extract_json "$MEMORY_RESPONSE" ".success")
 
 if [ "$MEMORY_SUCCESS" = "true" ]; then
     check_result "Memory Creation"
-    MEMORY_ID=$(extract_json "$MEMORY_RESPONSE" ".message" | grep -o '[a-f0-9-]*' | head -1)
+    MEMORY_ID=$(extract_json "$MEMORY_RESPONSE" ".message" | grep -o '[a-f0-9-]*' )
     echo "Memory ID: $MEMORY_ID"
 else
     echo "❌ Failed to create memory"

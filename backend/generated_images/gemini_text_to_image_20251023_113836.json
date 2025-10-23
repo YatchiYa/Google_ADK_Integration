@@ -1,0 +1,16 @@
+{
+  "filename": "gemini_text_to_image_20251023_113836.png",
+  "timestamp": "2025-10-23T11:38:36.581285",
+  "model_id": "gemini-2.5-flash-image-preview",
+  "prompt": "lovely space image",
+  "generation_type": "text_to_image",
+  "temperature": 1,
+  "input_image_path": null,
+  "additional_image_paths": null,
+  "local_path": "generated_images/gemini_text_to_image_20251023_113836.png",
+  "additional_generated_paths": [],
+  "text_responses": [
+    "Sure, here's a lovely space image for you! "
+  ],
+  "total_images_generated": 1
+}

@@ -81,7 +81,12 @@ class AgentManager:
         self._agent_instances: Dict[str, LlmAgent] = {}
         self._lock = Lock()
         
+        # Debug tracking
+        self._agent_creation_count = 0
+        self._agent_usage_stats = {}
+        
         logger.info("Agent manager initialized")
+        logger.debug(f"DEBUG: AgentManager.__init__ - Tool manager: {type(tool_manager)}, Memory manager: {type(memory_manager)}")
 
     def create_agent(self,
                     name: str,
@@ -91,7 +96,8 @@ class AgentManager:
                     agent_id: Optional[str] = None,
                     planner: Optional[str] = None,
                     agent_type: Optional[str] = None,
-                    sub_agents: Optional[List[str]] = None) -> str:
+                    sub_agents: Optional[List[str]] = None,
+                    output_key: Optional[str] = None) -> str:
         """
         Create a new dynamic agent
         
@@ -109,13 +115,24 @@ class AgentManager:
             str: Agent ID
         """
         try:
+            self._agent_creation_count += 1
+            creation_id = f"creation_{self._agent_creation_count}"
+            
+            logger.debug(f"DEBUG: create_agent ({creation_id}) - Starting agent creation")
+            logger.debug(f"DEBUG: create_agent ({creation_id}) - Input params: name='{name}', agent_type='{agent_type}', tools={tools}, sub_agents={sub_agents}")
+            logger.debug(f"DEBUG: create_agent ({creation_id}) - Persona: {persona.name} - {persona.description}")
+            
             # Generate agent ID
             if not agent_id:
                 agent_id = f"agent_{uuid.uuid4().hex[:8]}"
             
+            logger.debug(f"DEBUG: create_agent ({creation_id}) - Generated agent_id: {agent_id}")
+            
             # Use default config if not provided
             if not config:
                 config = AgentConfig()
+            
+            logger.debug(f"DEBUG: create_agent ({creation_id}) - Config: model={config.model}, temp={config.temperature}, max_tokens={config.max_output_tokens}")
             
             # Create agent info
             agent_info = AgentInfo(
@@ -127,13 +144,18 @@ class AgentManager:
                 tools=tools or []
             )
             
+            logger.debug(f"DEBUG: create_agent ({creation_id}) - AgentInfo created: {agent_info.agent_id}")
+            
             # Build instruction from persona
             instruction = self._build_instruction(persona)
+            logger.debug(f"DEBUG: create_agent ({creation_id}) - Built instruction length: {len(instruction)}")
             
             # Get tools from registry (including agent tools)
             agent_tools = []
             if tools:
+                logger.debug(f"DEBUG: create_agent ({creation_id}) - Requesting tools: {tools}")
                 agent_tools = self.tool_manager.get_tools_for_agent(tools, agent_manager=self)
+                logger.debug(f"DEBUG: create_agent ({creation_id}) - Retrieved {len(agent_tools)} tools: {[getattr(t, 'name', str(t)) for t in agent_tools]}")
             
             # Create generate content config
             generate_config = types.GenerateContentConfig(
@@ -143,65 +165,120 @@ class AgentManager:
                 top_k=config.top_k,
                 safety_settings=config.safety_settings or []
             )
+            logger.debug(f"DEBUG: create_agent ({creation_id}) - GenerateContentConfig created: {generate_config}")
             
             # Create LLM model
             if config.model.startswith(("openai/", "anthropic/", "ollama/")):
                 model = LiteLlm(model=config.model)
+                logger.debug(f"DEBUG: create_agent ({creation_id}) - Created LiteLlm model: {config.model}")
             else:
                 model = config.model
+                logger.debug(f"DEBUG: create_agent ({creation_id}) - Using direct model: {config.model}")
             
             # Create ADK agent based on type
+            logger.debug(f"DEBUG: create_agent ({creation_id}) - Creating agent type: {agent_type or 'regular'}")
+            
             if agent_type == "SequentialAgent":
-                # Create REAL Sequential Team Agent using ADK classes
+                logger.debug(f"DEBUG: create_agent ({creation_id}) - Creating SequentialAgent with sub_agents: {sub_agents}")
+                
+                # Create Sequential Coordinator using AgentTool delegation (more reliable)
                 if not sub_agents:
                     raise ValueError("Sequential agent requires sub_agents")
                 
-                # Get actual sub-agent instances (not IDs)
-                sub_agent_instances = []
+                # Create agent tools for each sub-agent
+                sequential_tools = []
                 for sub_agent_id in sub_agents:
-                    sub_agent = self.get_agent(sub_agent_id)
-                    if not sub_agent:
+                    logger.debug(f"DEBUG: create_agent ({creation_id}) - Checking sub-agent: {sub_agent_id}")
+                    if not self.get_agent_info(sub_agent_id):
                         raise ValueError(f"Sub-agent {sub_agent_id} not found")
-                    sub_agent_instances.append(sub_agent)
+                    sequential_tools.append(f"agent:{sub_agent_id}")
                 
-                # Use REAL ADK SequentialAgent class
-                from google.adk.agents import SequentialAgent
-                adk_agent = SequentialAgent(
+                logger.debug(f"DEBUG: create_agent ({creation_id}) - Sequential tools: {sequential_tools}")
+                
+                # Get tools from registry (including agent delegation tools)
+                agent_tools = self.tool_manager.get_tools_for_agent(sequential_tools, agent_manager=self)
+                logger.debug(f"DEBUG: create_agent ({creation_id}) - Sequential agent tools count: {len(agent_tools)}")
+                
+                # Create enhanced instruction for sequential coordination
+                sequential_instruction = f"""You are a Sequential Coordinator Agent. Your role is to coordinate tasks across multiple specialized sub-agents in a sequential manner.
+
+Sub-agents available:
+{chr(10).join([f"- {sub_id}: Use agent:{sub_id} tool to delegate tasks" for sub_id in sub_agents])}
+
+SEQUENTIAL WORKFLOW RULES:
+1. For simple queries, delegate to the most appropriate single sub-agent
+2. For complex tasks, break them down and delegate sequentially
+3. Always use the agent:sub_agent_id tools for delegation
+4. Coordinate results from multiple sub-agents when needed
+5. Provide a unified, coherent response
+
+Original persona: {persona.description}"""
+                
+                # Create regular LLM agent with agent delegation tools
+                adk_agent = LlmAgent(
+                    model=model,
                     name=agent_id,
-                    sub_agents=sub_agent_instances,
-                    description=persona.description
+                    description=persona.description,
+                    instruction=sequential_instruction,
+                    tools=agent_tools,
+                    generate_content_config=generate_config,
+                    output_key=output_key or f"{agent_id}_response"
                 )
                 
                 # Store sub-agent information in metadata
-                agent_info.metadata["agent_type"] = "SequentialAgent"
+                agent_info.metadata["agent_type"] = "SequentialCoordinator"
                 agent_info.metadata["sub_agents"] = sub_agents
-                logger.info(f"Created REAL SequentialAgent with {len(sub_agents)} sub-agents: {sub_agents}")
+                agent_info.metadata["workflow_pattern"] = "sequential"
+                agent_info.metadata["coordination_method"] = "agent_tools"
+                logger.info(f"Created Sequential Coordinator with {len(sub_agents)} sub-agents: {sub_agents}")
                 
             elif agent_type == "ParallelAgent":
-                # Create REAL Parallel Team Agent using ADK classes
+                # Create Parallel Coordinator using AgentTool delegation (more reliable)
                 if not sub_agents:
                     raise ValueError("Parallel agent requires sub_agents")
                 
-                # Get actual sub-agent instances (not IDs)
-                sub_agent_instances = []
+                # Create agent tools for each sub-agent
+                parallel_tools = []
                 for sub_agent_id in sub_agents:
-                    sub_agent = self.get_agent(sub_agent_id)
-                    if not sub_agent:
+                    if not self.get_agent_info(sub_agent_id):
                         raise ValueError(f"Sub-agent {sub_agent_id} not found")
-                    sub_agent_instances.append(sub_agent)
+                    parallel_tools.append(f"agent:{sub_agent_id}")
                 
-                # Use REAL ADK ParallelAgent class
-                from google.adk.agents import ParallelAgent
-                adk_agent = ParallelAgent(
+                # Get tools from registry (including agent delegation tools)
+                agent_tools = self.tool_manager.get_tools_for_agent(parallel_tools, agent_manager=self)
+                
+                # Create enhanced instruction for parallel coordination
+                parallel_instruction = f"""You are a Parallel Coordinator Agent. Your role is to coordinate tasks across multiple specialized sub-agents in parallel when beneficial.
+
+Sub-agents available:
+{chr(10).join([f"- {sub_id}: Use agent:{sub_id} tool to delegate tasks" for sub_id in sub_agents])}
+
+PARALLEL WORKFLOW RULES:
+1. For tasks that can be split, delegate parts to different sub-agents simultaneously
+2. For simple queries, delegate to the most appropriate single sub-agent
+3. Always use the agent:sub_agent_id tools for delegation
+4. Combine and synthesize results from multiple sub-agents
+5. Provide a unified, coherent response
+
+Original persona: {persona.description}"""
+                
+                # Create regular LLM agent with agent delegation tools
+                adk_agent = LlmAgent(
+                    model=model,
                     name=agent_id,
-                    sub_agents=sub_agent_instances,
-                    description=persona.description
+                    description=persona.description,
+                    instruction=parallel_instruction,
+                    tools=agent_tools,
+                    generate_content_config=generate_config,
+                    output_key=output_key or f"{agent_id}_response"
                 )
                 
                 # Store sub-agent information in metadata
-                agent_info.metadata["agent_type"] = "ParallelAgent"
+                agent_info.metadata["agent_type"] = "ParallelCoordinator"
                 agent_info.metadata["sub_agents"] = sub_agents
-                logger.info(f"Created REAL ParallelAgent with {len(sub_agents)} sub-agents: {sub_agents}")
+                agent_info.metadata["workflow_pattern"] = "parallel"
+                agent_info.metadata["coordination_method"] = "agent_tools"
+                logger.info(f"Created Parallel Coordinator with {len(sub_agents)} sub-agents: {sub_agents}")
                 
             else:
                 # Create regular LLM agent with optional planner
@@ -210,30 +287,107 @@ class AgentManager:
                 if planner == "PlanReActPlanner":
                     from google.adk.planners import PlanReActPlanner
                     planner_instance = PlanReActPlanner()
-                    logger.info(f"Adding PlanReActPlanner to agent {agent_id}")
+                    logger.info(f"Adding PlanReActPlanner to agent {agent_id} - enables structured PLANNING->ACTION->REASONING->FINAL_ANSWER format")
+                    
                 elif planner == "BuiltInPlanner":
                     from google.adk.planners import BuiltInPlanner
+                    # Configure thinking budget based on agent complexity
+                    thinking_budget = 512  # Default
+                    if len(agent_tools) > 3:  # More complex agents get more thinking tokens
+                        thinking_budget = 1024
+                    
                     planner_instance = BuiltInPlanner(
-                        thinking_config=types.ThinkingConfig(include_thoughts=True)
+                        thinking_config=types.ThinkingConfig(
+                            include_thoughts=True,
+                            thinking_budget=thinking_budget
+                        )
                     )
-                    logger.info(f"Adding BuiltInPlanner to agent {agent_id}")
+                    logger.info(f"Adding BuiltInPlanner to agent {agent_id} with thinking_budget={thinking_budget}")
+                    
+                elif planner == "BuiltInPlannerAdvanced":
+                    from google.adk.planners import BuiltInPlanner
+                    # Advanced configuration for complex reasoning tasks
+                    planner_instance = BuiltInPlanner(
+                        thinking_config=types.ThinkingConfig(
+                            include_thoughts=True,
+                            thinking_budget=2048  # More thinking tokens for complex tasks
+                        )
+                    )
+                    logger.info(f"Adding Advanced BuiltInPlanner to agent {agent_id} with extended thinking capacity")
+                
+                # Enhance instruction for planner-enabled agents
+                if planner_instance:
+                    if planner == "PlanReActPlanner":
+                        enhanced_instruction = f"""{instruction}
+
+IMPORTANT: You MUST follow the ReAct methodology structure in your responses:
+
+/*PLANNING*/
+Create a detailed step-by-step plan for the task
+
+/*ACTION*/
+Execute the planned actions using available tools
+
+/*REASONING*/
+Explain your reasoning and observations from the actions
+
+/*FINAL_ANSWER*/
+Provide a comprehensive final answer based on your analysis
+
+Always think systematically and use tools strategically."""
+                    else:
+                        enhanced_instruction = f"""{instruction}
+
+You have advanced thinking capabilities. Use your internal reasoning to plan and structure your approach before responding. Think through problems step by step."""
+                else:
+                    enhanced_instruction = instruction
                 
                 # Create agent with planner
-                adk_agent = LlmAgent(
-                    model=model,
-                    name=agent_id,
-                    description=persona.description,
-                    instruction=instruction,
-                    tools=agent_tools,
-                    generate_content_config=generate_config,
-                    planner=planner_instance,
-                    output_key=f"{agent_id}_response"
-                )
+                logger.debug(f"DEBUG: create_agent ({creation_id}) - Creating LlmAgent with planner: {planner}")
+                logger.debug(f"DEBUG: create_agent ({creation_id}) - Enhanced instruction length: {len(enhanced_instruction)}")
+                
+                if planner_instance:
+                    adk_agent = LlmAgent(
+                        model=model,
+                        name=agent_id,
+                        description=persona.description,
+                        instruction=enhanced_instruction,
+                        tools=agent_tools,
+                        generate_content_config=generate_config,
+                        planner=planner_instance,
+                        output_key=output_key or f"{agent_id}_response"
+                    )
+                else:
+                    adk_agent = LlmAgent(
+                        model=model,
+                        name=agent_id,
+                        description=persona.description,
+                        instruction=enhanced_instruction,
+                        tools=agent_tools,
+                        generate_content_config=generate_config,
+                        output_key=output_key or f"{agent_id}_response"
+                    )
+                
+                logger.debug(f"DEBUG: create_agent ({creation_id}) - LlmAgent created successfully: {type(adk_agent)}")
             
             # Store agent
+            logger.debug(f"DEBUG: create_agent ({creation_id}) - Storing agent in registry")
+            
             with self._lock:
                 self._agents[agent_id] = agent_info
                 self._agent_instances[agent_id] = adk_agent
+                
+                # Update usage stats
+                self._agent_usage_stats[agent_id] = {
+                    "created_at": datetime.now(),
+                    "creation_id": creation_id,
+                    "agent_type": agent_type or "regular",
+                    "tools_count": len(agent_tools),
+                    "has_planner": planner is not None
+                }
+            
+            logger.debug(f"DEBUG: create_agent ({creation_id}) - Agent stored successfully")
+            logger.debug(f"DEBUG: create_agent ({creation_id}) - Total agents in registry: {len(self._agents)}")
             
             logger.info(f"Created agent '{name}' with ID {agent_id}")
             return agent_id
@@ -245,14 +399,26 @@ class AgentManager:
     def get_agent(self, agent_id: str) -> Optional[LlmAgent]:
         """Get agent instance by ID"""
         with self._lock:
-            agent_info = self._agents.get(agent_id)
-            if agent_info and agent_info.is_active:
-                # Update usage stats
-                agent_info.usage_count += 1
-                agent_info.last_used = datetime.now()
+            logger.debug(f"DEBUG: get_agent - Looking for agent {agent_id}")
+            logger.debug(f"DEBUG: get_agent - Available instances: {list(self._agent_instances.keys())}")
+            logger.debug(f"DEBUG: get_agent - Available agent infos: {list(self._agents.keys())}")
+            
+            # Check if it's a team agent (ADK agent stored directly)
+            if agent_id in self._agent_instances:
+                agent_instance = self._agent_instances.get(agent_id)
+                logger.debug(f"DEBUG: get_agent - Found agent instance {agent_id}: {type(agent_instance)}")
                 
-                return self._agent_instances.get(agent_id)
-        return None
+                # Update usage stats if agent info exists
+                agent_info = self._agents.get(agent_id)
+                if agent_info and agent_info.is_active:
+                    agent_info.usage_count += 1
+                    agent_info.last_used = datetime.now()
+                    logger.debug(f"DEBUG: get_agent - Updated usage stats for {agent_id}: count={agent_info.usage_count}")
+                
+                return agent_instance
+            
+            logger.debug(f"DEBUG: get_agent - Agent {agent_id} not found in instances")
+            return None
 
     def get_agent_info(self, agent_id: str) -> Optional[AgentInfo]:
         """Get agent information by ID"""
@@ -634,3 +800,70 @@ class AgentManager:
         
         # Replace instance
         self._agent_instances[agent_id] = adk_agent
+
+    def create_team_agent(self, team_id: str, team_name: str, team_description: str, 
+                         team_type: str, agent_ids: List[str]) -> str:
+        """
+        Create a team agent from team manager data
+        
+        Args:
+            team_id: Team identifier
+            team_name: Team name
+            team_description: Team description
+            team_type: Team type (sequential, parallel, hierarchical)
+            agent_ids: List of sub-agent IDs
+            
+        Returns:
+            str: Created agent ID
+        """
+        try:
+            # Create persona for team agent
+            persona = AgentPersona(
+                name=f"{team_name} Coordinator",
+                description=team_description,
+                personality="collaborative and coordinating",
+                expertise=["team coordination", "task delegation"],
+                communication_style="professional"
+            )
+            
+            # Map team types to agent types
+            agent_type_map = {
+                "sequential": "SequentialAgent",
+                "parallel": "ParallelAgent",
+                "hierarchical": "LlmAgent"  # Hierarchical uses regular agent with agent tools
+            }
+            
+            agent_type = agent_type_map.get(team_type, "LlmAgent")
+            
+            # For hierarchical teams, create agent tools for delegation
+            tools = []
+            if team_type == "hierarchical":
+                tools = [f"agent:{agent_id}" for agent_id in agent_ids]
+            
+            # Create the agent
+            created_agent_id = self.create_agent(
+                name=team_name,
+                persona=persona,
+                agent_id=team_id,  # Use team_id as agent_id
+                agent_type=agent_type,
+                sub_agents=agent_ids if agent_type != "LlmAgent" else None,
+                tools=tools
+            )
+            
+            # Add team metadata
+            with self._lock:
+                agent_info = self._agents.get(created_agent_id)
+                if agent_info:
+                    agent_info.metadata.update({
+                        "is_team_agent": True,
+                        "team_type": team_type,
+                        "original_team_id": team_id,
+                        "member_agents": agent_ids
+                    })
+            
+            logger.info(f"Created team agent {created_agent_id} for team {team_id} ({team_type})")
+            return created_agent_id
+            
+        except Exception as e:
+            logger.error(f"Failed to create team agent for {team_id}: {e}")
+            raise

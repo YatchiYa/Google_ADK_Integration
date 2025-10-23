@@ -1,0 +1,16 @@
+{
+  "filename": "gemini_text_to_image_20251023_112747.png",
+  "timestamp": "2025-10-23T11:27:47.893646",
+  "model_id": "gemini-2.5-flash-image-preview",
+  "prompt": "a simple garden image",
+  "generation_type": "text_to_image",
+  "temperature": 1,
+  "input_image_path": null,
+  "additional_image_paths": null,
+  "local_path": "generated_images/gemini_text_to_image_20251023_112747.png",
+  "additional_generated_paths": [],
+  "text_responses": [
+    "Here is a simple garden image for you! "
+  ],
+  "total_images_generated": 1
+}

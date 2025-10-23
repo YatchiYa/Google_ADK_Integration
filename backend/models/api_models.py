@@ -158,6 +158,7 @@ class TeamType(str, Enum):
     SEQUENTIAL = "sequential"
     PARALLEL = "parallel"
     HIERARCHICAL = "hierarchical"
+    LOOP = "loop"
 
 
 class CreateTeamRequest(BaseModel):
@@ -336,3 +337,20 @@ class ExportAgentResponse(BaseModel):
 class ImportAgentRequest(BaseModel):
     """Import agent configuration request"""
     agent_config: Dict[str, Any]
+
+
+# Dynamic Tool Management Models
+class AttachToolsRequest(BaseModel):
+    """Request to attach tools to an agent"""
+    tool_names: List[str] = Field(..., description="List of tool names to attach")
+
+
+class DetachToolsRequest(BaseModel):
+    """Request to detach tools from an agent"""
+    tool_names: List[str] = Field(..., description="List of tool names to detach")
+
+
+class AgentToolsResponse(BaseResponse):
+    """Response with agent's current tools"""
+    agent_id: str
+    tools: List[str] = []
