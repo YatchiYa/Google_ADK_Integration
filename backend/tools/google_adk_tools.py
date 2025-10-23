@@ -11,8 +11,8 @@ import yfinance as yf
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 import pytz
-from loguru import logger
-
+from loguru import logger 
+import json
 
 def google_search(query: str, num_results: int = 5) -> str:
     """
@@ -507,3 +507,90 @@ def yahoo_finance_data(symbol: str, interval: str = "5m", range_type: str = "tod
     except Exception as e:
         logger.error(f"Error in yahoo_finance_data: {e}")
         return f"Error fetching Yahoo Finance data: {str(e)}"
+
+
+
+def call_document_rag_code_civile_algerian(query: str, mode: str = "global", user_prompt: str = "expert in laws retrieving"):  
+    """
+    Search and retrieve information from the Algerian Civil Code using RAG.
+    
+    Args:
+        query (str): The legal question or topic to search for
+        mode (str): Search mode - "global" for comprehensive search
+        user_prompt (str): Context for the search expert role
+        
+    Returns:
+        str: Legal information and analysis from Algerian Civil Code
+    """
+    url = "http://0.0.0.0:9621/query/stream"
+
+    payload = {
+        "mode": mode,
+        "response_type": "Multiple Paragraphs",
+        "top_k": 40,
+        "chunk_top_k": 20,
+        "max_entity_tokens": 6000,
+        "max_relation_tokens": 8000,
+        "max_total_tokens": 30000,
+        "only_need_context": False,
+        "only_need_prompt": False,
+        "stream": True,
+        "history_turns": 0,
+        "user_prompt": user_prompt,
+        "enable_rerank": True,
+        "query": query,
+        "conversation_history": []
+    }
+
+    headers = {"Content-Type": "application/json"}
+
+    try:
+        with requests.post(url, headers=headers, data=json.dumps(payload), stream=True, timeout=120) as response:
+            logger.info(f"Response status code: {response.status_code}")
+            response.raise_for_status()
+            full_text = ""
+            
+            for line in response.iter_lines():
+                if line:
+                    # Decode bytes to string if necessary
+                    if isinstance(line, bytes):
+                        line_str = line.decode('utf-8')
+                    else:
+                        line_str = str(line)
+                    
+                    logger.info(f"Response line: {line_str}")
+                    full_text += line_str + "\n"
+            
+            result = full_text.strip()
+            logger.info(f"Final response length: {len(result)} characters")
+            
+            # Try to parse JSON response and extract the actual content
+            try:
+                json_response = json.loads(result)
+                if isinstance(json_response, dict):
+                    if 'response' in json_response:
+                        actual_response = json_response['response']
+                        references = json_response.get('references', [])
+                        
+                        # Format the response with references if available
+                        formatted_response = actual_response
+                        if references:
+                            formatted_response += "\n\nReferences:\n"
+                            for i, ref in enumerate(references, 1):
+                                formatted_response += f"{i}. {ref}\n"
+                        
+                        logger.info(f"Parsed JSON response successfully")
+                        return formatted_response
+                    else:
+                        logger.info(f"JSON response doesn't contain 'response' field")
+                        return result
+                else:
+                    logger.info(f"Response is not a JSON object")
+                    return result
+            except json.JSONDecodeError:
+                logger.info(f"Response is not valid JSON, returning as-is")
+                return result
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error while connecting to endpoint: {e}")
+        return f"Error while connecting to endpoint: {e}"

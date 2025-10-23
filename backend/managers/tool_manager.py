@@ -499,7 +499,8 @@ class ToolManager:
                     custom_calculator, 
                     text_analyzer,
                     product_hunt_search,
-                    yahoo_finance_data
+                    yahoo_finance_data,
+                    call_document_rag_code_civile_algerian
                 )
                 
                 # Register Gemini image tools
@@ -515,7 +516,8 @@ class ToolManager:
                     meta_publish_text,
                     meta_publish_image,
                     meta_publish_text_and_image,
-                    meta_get_account_info
+                    meta_get_account_info,
+                    update_meta_tokens
                 )
                 
                 self.register_tool(
@@ -547,6 +549,14 @@ class ToolManager:
                     tool=yahoo_finance_data,
                     description="Get real-time and historical financial data from Yahoo Finance. Supports stocks, crypto, and other symbols.",
                     category="finance",
+                    author="system"
+                )
+
+                self.register_tool(
+                    name="call_document_rag_code_civile_algerian",
+                    tool=call_document_rag_code_civile_algerian,
+                    description="Search and retrieve information from the Algerian Civil Code using RAG (Retrieval-Augmented Generation). Provides expert legal analysis and context from Algerian civil law documents.",
+                    category="document_rag",
                     author="system"
                 )
                 
@@ -612,6 +622,14 @@ class ToolManager:
                     name="meta_get_account_info",
                     tool=meta_get_account_info,
                     description="Get information about configured Meta accounts (Facebook page and Instagram account).",
+                    category="social_media",
+                    author="system"
+                )
+                
+                self.register_tool(
+                    name="update_meta_tokens",
+                    tool=update_meta_tokens,
+                    description="Update Meta authentication tokens from frontend Facebook login.",
                     category="social_media",
                     author="system"
                 )

@@ -153,7 +153,7 @@ async def health_check():
 
 
 # Include routers
-from routers import agents, tools, memory, teams, conversations, streaming, auth, images
+from routers import agents, tools, memory, teams, conversations, streaming, auth, images, meta_auth
 
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(agents.router, prefix="/api/v1/agents", tags=["Agents"])
@@ -163,6 +163,7 @@ app.include_router(teams.router, prefix="/api/v1/teams", tags=["Teams"])
 app.include_router(conversations.router, prefix="/api/v1/conversations", tags=["Conversations"])
 app.include_router(streaming.router, prefix="/api/v1/streaming", tags=["Streaming"])
 app.include_router(images.router, tags=["Images"])
+app.include_router(meta_auth.router, tags=["Meta Authentication"])
 
 
 @app.get("/")

@@ -24,17 +24,106 @@ from .meta_account_handler import (
 FACEBOOK_PAGE_ID = "861883367002548"
 INSTAGRAM_ACCOUNT_ID = "17841460715803093"
 
-# Access tokens (you'll need to get these from your meta_account_handler.py)
+# Default access tokens (fallback - will be replaced by dynamic tokens from frontend)
 ACCESS_TOKEN = "EAAGZAhN3OgkMBP93ZCPweFDmNBbUU7AxCsj1vWyDQCMcobowszdgObktKzZCZAmp3cqsnuPwd9U2tISITBvVgG4FZAzwkS4ZBjDewzchu9UmFmXdF8iJv8O16me7CNuQUbDCTn5LVa3HlZAOAuBPvZBGCqYug0LStDPPEYRiUvoKHOgbCx1rzEkGosCbR0ZAN0vZBygp2j7d3mPaNOW87xauFuPUVL338V0Gc0ZCRBuj5ACKzdk4KULwA6sudTP2lUuNI8ik4spNlkZD"
 FACEBOOK_PAGE_ACCESS_TOKEN = "EAAGZAhN3OgkMBP93ZCPweFDmNBbUU7AxCsj1vWyDQCMcobowszdgObktKzZCZAmp3cqsnuPwd9U2tISITBvVgG4FZAzwkS4ZBjDewzchu9UmFmXdF8iJv8O16me7CNuQUbDCTn5LVa3HlZAOAuBPvZBGCqYug0LStDPPEYRiUvoKHOgbCx1rzEkGosCbR0ZAN0vZBygp2j7d3mPaNOW87xauFuPUVL338V0Gc0ZCRBuj5ACKzdk4KULwA6sudTP2lUuNI8ik4spNlkZD"
 
+# Dynamic token storage (updated from frontend)
+_dynamic_tokens = {
+    "user_access_token": None,
+    "page_access_token": None,
+    "page_id": None,
+    "instagram_account_id": None,
+    "last_updated": None
+}
+
+def update_meta_tokens(
+    user_access_token: str,
+    page_access_token: str,
+    page_id: str,
+    instagram_account_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Update Meta authentication tokens from frontend.
+    
+    Args:
+        user_access_token: Facebook user access token
+        page_access_token: Facebook page access token
+        page_id: Facebook page ID
+        instagram_account_id: Instagram business account ID (optional)
+        
+    Returns:
+        Dict containing update status
+        
+    Example:
+        result = update_meta_tokens(
+            user_access_token="user_token",
+            page_access_token="page_token", 
+            page_id="123456789",
+            instagram_account_id="ig_123456"
+        )
+    """
+    global _dynamic_tokens
+    
+    try:
+        _dynamic_tokens.update({
+            "user_access_token": user_access_token,
+            "page_access_token": page_access_token,
+            "page_id": page_id,
+            "instagram_account_id": instagram_account_id or INSTAGRAM_ACCOUNT_ID,
+            "last_updated": time.time()
+        })
+        
+        logger.info(f"✅ Meta tokens updated successfully")
+        logger.info(f"   Page ID: {page_id}")
+        logger.info(f"   Instagram ID: {instagram_account_id}")
+        
+        return {
+            "success": True,
+            "message": "Meta tokens updated successfully",
+            "page_id": page_id,
+            "instagram_account_id": instagram_account_id,
+            "updated_at": _dynamic_tokens["last_updated"]
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to update Meta tokens: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to update Meta tokens"
+        }
+
+def get_active_tokens() -> Dict[str, str]:
+    """
+    Get currently active tokens (dynamic if available, fallback to static).
+    
+    Returns:
+        Dict containing active tokens
+    """
+    if _dynamic_tokens["page_access_token"] and _dynamic_tokens["last_updated"]:
+        # Check if tokens are not too old (24 hours)
+        if time.time() - _dynamic_tokens["last_updated"] < 86400:
+            return {
+                "page_access_token": _dynamic_tokens["page_access_token"],
+                "page_id": _dynamic_tokens["page_id"],
+                "instagram_account_id": _dynamic_tokens["instagram_account_id"]
+            }
+    
+    # Fallback to static tokens
+    return {
+        "page_access_token": FACEBOOK_PAGE_ACCESS_TOKEN,
+        "page_id": FACEBOOK_PAGE_ID,
+        "instagram_account_id": INSTAGRAM_ACCOUNT_ID
+    }
+
 def meta_publish_content(
-    content_type: str = "text",
-    text_message: str = "",
-    image_url: str = "",
-    platforms: List[str] = ["facebook"],
-    facebook_page_id: str = FACEBOOK_PAGE_ID,
-    instagram_account_id: str = INSTAGRAM_ACCOUNT_ID
+    content_type: str,
+    text_message: str,
+    image_url: str,
+    platforms: List[str],
+    facebook_page_id: Optional[str] = None,
+    instagram_account_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Universal Meta publishing tool for Facebook and Instagram.
@@ -73,6 +162,12 @@ def meta_publish_content(
             platforms=["instagram"]
         )
     """
+    # Handle default values
+    if facebook_page_id is None:
+        facebook_page_id = FACEBOOK_PAGE_ID
+    if instagram_account_id is None:
+        instagram_account_id = INSTAGRAM_ACCOUNT_ID
+    
     logger.info(f"🚀 Meta Publisher Tool called with:")
     logger.info(f"   Content Type: {content_type}")
     logger.info(f"   Text: {text_message[:100]}{'...' if len(text_message) > 100 else ''}")
@@ -184,12 +279,16 @@ def _publish_to_facebook(content_type: str, text_message: str, image_url: str, p
     logger.info(f"📘 Facebook publishing: {content_type}")
     
     try:
+        # Get active tokens
+        tokens = get_active_tokens()
+        page_access_token = tokens["page_access_token"]
+        
         if content_type == "text":
-            return post_text_to_facebook_page(page_id, FACEBOOK_PAGE_ACCESS_TOKEN, text_message)
+            return post_text_to_facebook_page(page_id, page_access_token, text_message)
         elif content_type == "image":
-            return post_image_to_facebook_page(page_id, FACEBOOK_PAGE_ACCESS_TOKEN, image_url, "")
+            return post_image_to_facebook_page(page_id, page_access_token, image_url, "")
         elif content_type == "text_with_image":
-            return post_text_with_image_to_facebook_page(page_id, FACEBOOK_PAGE_ACCESS_TOKEN, text_message, image_url)
+            return post_text_with_image_to_facebook_page(page_id, page_access_token, text_message, image_url)
         else:
             return {"error": {"message": f"Unsupported Facebook content type: {content_type}"}}
     except Exception as e:
@@ -201,13 +300,17 @@ def _publish_to_instagram(content_type: str, text_message: str, image_url: str, 
     logger.info(f"📷 Instagram publishing: {content_type}")
     
     try:
+        # Get active tokens
+        tokens = get_active_tokens()
+        page_access_token = tokens["page_access_token"]
+        
         if content_type == "text":
             # Instagram typically requires images, but we'll try
             return {"error": {"message": "Instagram requires images for most posts. Use 'text_with_image' or 'image' instead."}}
         elif content_type == "image":
-            return post_image_to_instagram_account(instagram_id, FACEBOOK_PAGE_ACCESS_TOKEN, image_url, "")
+            return post_image_to_instagram_account(instagram_id, page_access_token, image_url, "")
         elif content_type == "text_with_image":
-            return post_text_with_image_to_instagram_account(instagram_id, FACEBOOK_PAGE_ACCESS_TOKEN, text_message, image_url)
+            return post_text_with_image_to_instagram_account(instagram_id, page_access_token, text_message, image_url)
         else:
             return {"error": {"message": f"Unsupported Instagram content type: {content_type}"}}
     except Exception as e:
@@ -216,7 +319,7 @@ def _publish_to_instagram(content_type: str, text_message: str, image_url: str, 
 
 def meta_publish_text(
     text_message: str,
-    platforms: List[str] = ["facebook", "instagram"]
+    platforms: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
     Simplified function to publish text content.
@@ -232,16 +335,20 @@ def meta_publish_text(
     Example:
         result = meta_publish_text("Hello from AI! 🤖", ["facebook"])
     """
+    if platforms is None:
+        platforms = ["facebook", "instagram"]
+        
     return meta_publish_content(
         content_type="text",
         text_message=text_message,
+        image_url="",
         platforms=platforms
     )
 
 def meta_publish_image(
     image_url: str,
-    caption: str = "",
-    platforms: List[str] = ["facebook", "instagram"]
+    caption: Optional[str] = None,
+    platforms: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
     Simplified function to publish image content.
@@ -261,6 +368,11 @@ def meta_publish_image(
             ["facebook", "instagram"]
         )
     """
+    if caption is None:
+        caption = ""
+    if platforms is None:
+        platforms = ["facebook", "instagram"]
+        
     if caption:
         return meta_publish_content(
             content_type="text_with_image",
@@ -271,6 +383,7 @@ def meta_publish_image(
     else:
         return meta_publish_content(
             content_type="image",
+            text_message="",
             image_url=image_url,
             platforms=platforms
         )
@@ -278,7 +391,7 @@ def meta_publish_image(
 def meta_publish_text_and_image(
     text_message: str,
     image_url: str,
-    platforms: List[str] = ["facebook", "instagram"]
+    platforms: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
     Simplified function to publish text with image.
@@ -298,6 +411,9 @@ def meta_publish_text_and_image(
             ["facebook", "instagram"]
         )
     """
+    if platforms is None:
+        platforms = ["facebook", "instagram"]
+        
     return meta_publish_content(
         content_type="text_with_image",
         text_message=text_message,
@@ -380,6 +496,31 @@ def get_meta_publisher_tools() -> List[Dict[str, Any]]:
     """
     return [
         {
+            "name": "update_meta_tokens",
+            "description": "Update Meta authentication tokens from frontend Facebook login.",
+            "function": update_meta_tokens,
+            "parameters": {
+                "user_access_token": {
+                    "type": "string",
+                    "description": "Facebook user access token"
+                },
+                "page_access_token": {
+                    "type": "string",
+                    "description": "Facebook page access token"
+                },
+                "page_id": {
+                    "type": "string",
+                    "description": "Facebook page ID"
+                },
+                "instagram_account_id": {
+                    "type": "string",
+                    "description": "Instagram business account ID (optional)"
+                }
+            },
+            "required": ["user_access_token", "page_access_token", "page_id"],
+            "category": "social_media"
+        },
+        {
             "name": "meta_publish_content",
             "description": "Universal Meta publishing tool for Facebook and Instagram. Supports text, images, and combined content.",
             "function": meta_publish_content,
@@ -387,8 +528,7 @@ def get_meta_publisher_tools() -> List[Dict[str, Any]]:
                 "content_type": {
                     "type": "string",
                     "description": "Type of content to publish",
-                    "enum": ["text", "image", "text_with_image"],
-                    "default": "text"
+                    "enum": ["text", "image", "text_with_image"]
                 },
                 "text_message": {
                     "type": "string",
@@ -401,11 +541,10 @@ def get_meta_publisher_tools() -> List[Dict[str, Any]]:
                 "platforms": {
                     "type": "array",
                     "items": {"type": "string", "enum": ["facebook", "instagram"]},
-                    "description": "List of platforms to publish to",
-                    "default": ["facebook"]
+                    "description": "List of platforms to publish to"
                 }
             },
-            "required": ["content_type"],
+            "required": ["content_type", "text_message", "image_url", "platforms"],
             "category": "social_media"
         },
         {
