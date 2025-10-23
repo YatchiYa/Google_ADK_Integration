@@ -522,7 +522,7 @@ def call_document_rag_code_civile_algerian(query: str, mode: str = "global", use
     Returns:
         str: Legal information and analysis from Algerian Civil Code
     """
-    url = "http://0.0.0.0:9621/query/stream"
+    url = "https://legal-index.com/light_rag/query/stream"
 
     payload = {
         "mode": mode,

@@ -657,25 +657,30 @@ async def update_agent_config(
         # Update agent configuration
         updated = False
         
+        # Prepare database updates
+        db_updates = {}
+        
         # Handle agent_type changes (ReAct mode)
         if "agent_type" in config:
             agent_type = config["agent_type"]
-            if agent_type != getattr(agent_info, 'agent_type', None):
-                # For now, we'll update the metadata to track this
-                # In a full implementation, you'd recreate the agent with the new type
+            current_type = agent_info.metadata.get('agent_type')
+            if agent_type != current_type:
                 if not hasattr(agent_info, 'metadata'):
                     agent_info.metadata = {}
                 agent_info.metadata['agent_type'] = agent_type
+                db_updates['agent_type'] = agent_type
                 updated = True
                 logger.info(f"Updated agent {agent_id} type to: {agent_type}")
         
         # Handle planner changes
         if "planner" in config:
             planner = config["planner"]
-            if planner != getattr(agent_info, 'planner', None):
+            current_planner = agent_info.metadata.get('planner')
+            if planner != current_planner:
                 if not hasattr(agent_info, 'metadata'):
                     agent_info.metadata = {}
                 agent_info.metadata['planner'] = planner
+                db_updates['planner'] = planner
                 updated = True
                 logger.info(f"Updated agent {agent_id} planner to: {planner}")
         
@@ -684,13 +689,22 @@ async def update_agent_config(
             tools = config["tools"]
             if tools != agent_info.tools:
                 agent_info.tools = tools
+                db_updates['tools'] = tools
                 updated = True
                 logger.info(f"Updated agent {agent_id} tools to: {tools}")
         
         if updated:
-            # In a full implementation, you might want to recreate the agent instance
-            # For now, we'll just update the stored info
-            logger.info(f"Agent {agent_id} configuration updated successfully")
+            # Save to database
+            if agent_manager.db_service and db_updates:
+                agent_manager.db_service.update_agent(agent_id, db_updates)
+                logger.info(f"Saved agent {agent_id} config updates to database: {db_updates}")
+            
+            # Recreate agent instance with new configuration
+            success = agent_manager._recreate_agent(agent_id)
+            if success:
+                logger.info(f"Agent {agent_id} instance recreated with new configuration")
+            else:
+                logger.warning(f"Failed to recreate agent {agent_id} instance")
             
             return BaseResponse(
                 success=True,

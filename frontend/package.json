@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:https": "node https-server.js",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "generate-ssl": "bash generate-ssl.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

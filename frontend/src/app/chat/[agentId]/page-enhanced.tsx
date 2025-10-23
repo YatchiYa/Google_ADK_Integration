@@ -104,9 +104,9 @@ export default function ChatPage() {
 
   const loadConversations = async () => {
     try {
-      const convs = await ChatService.getConversations(agentId);
-      setConversations(convs);
-      console.log("Loaded conversations:", convs);
+      // TODO: Implement conversation loading from API
+      // const convs = await ChatService.getConversations(agentId);
+      // setConversations(convs);
     } catch (error) {
       console.error("Failed to load conversations:", error);
     }
@@ -185,9 +185,6 @@ export default function ChatPage() {
         initialMessage,
         eventHandler
       );
-      
-      // Reload conversations list
-      await loadConversations();
     } catch (error) {
       console.error("Failed to start conversation:", error);
       setError(
@@ -286,41 +283,6 @@ export default function ChatPage() {
     setSidebarOpen(false);
   };
 
-  const handleConversationSelect = async (conversationId: string) => {
-    try {
-      // Load conversation from API
-      const conversation = await ChatService.getConversation(conversationId);
-
-      // Set session
-      setSession({
-        id: conversation.session_id,
-        agent_id: conversation.agent_id,
-        user_id: conversation.user_id,
-        created_at: conversation.created_at,
-        updated_at: conversation.updated_at,
-        is_active: conversation.is_active,
-        messages: [],
-      });
-
-      // Transform and set messages
-      const transformedMessages = conversation.messages.map((msg: any) => ({
-        id: msg.message_id || `${Date.now()}-${Math.random()}`,
-        type: msg.role === "user" ? "user" : msg.role === "assistant" ? "assistant" : "system",
-        content: msg.content,
-        timestamp: new Date(msg.timestamp),
-        metadata: msg.metadata,
-      }));
-
-      setMessages(transformedMessages);
-
-      // Close sidebar
-      setSidebarOpen(false);
-    } catch (error) {
-      console.error("Failed to load conversation:", error);
-      setError("Failed to load conversation");
-    }
-  };
-
   const handleExampleClick = (example: string) => {
     sendMessage(example);
   };
@@ -366,19 +328,16 @@ export default function ChatPage() {
   };
 
   const toggleReactMode = async () => {
-    // When enabling ReAct mode, use PlanReActPlanner
-    // When disabling, remove both agent_type and planner
     const newMode = isReactMode ? undefined : "react";
     await updateAgentConfig({
       agent_type: newMode,
-      planner: newMode === "react" ? "PlanReActPlanner" : undefined,
+      planner: newMode === "react" ? "default" : undefined,
     });
   };
 
   const togglePlanner = async () => {
-    // This is now handled by toggleReactMode
-    // Keep for backward compatibility but it does the same as toggleReactMode
-    await toggleReactMode();
+    const newPlanner = plannerEnabled ? undefined : "default";
+    await updateAgentConfig({ planner: newPlanner });
   };
 
   const stopStreaming = async () => {
@@ -433,7 +392,7 @@ export default function ChatPage() {
         currentAgentId={agentId}
         onAgentSelect={handleAgentSelect}
         onNewChat={handleNewChat}
-        onConversationSelect={handleConversationSelect}
+        onConversationSelect={(id) => console.log("Load conversation:", id)}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />

@@ -49,7 +49,7 @@ class ConversationManager:
     Handles chat sessions, message history, and conversation persistence
     """
     
-    def __init__(self, agent_manager, memory_manager, streaming_handler):
+    def __init__(self, agent_manager, memory_manager, streaming_handler, database_service=None):
         """
         Initialize conversation manager
         
@@ -57,10 +57,12 @@ class ConversationManager:
             agent_manager: Agent manager instance
             memory_manager: Memory manager instance
             streaming_handler: Streaming handler instance
+            database_service: Database service instance for persistence
         """
         self.agent_manager = agent_manager
         self.memory_manager = memory_manager
         self.streaming_handler = streaming_handler
+        self.db_service = database_service
         
         self._conversations: Dict[str, Conversation] = {}
         self._lock = Lock()
@@ -117,6 +119,36 @@ class ConversationManager:
             with self._lock:
                 self._conversations[session_id] = conversation
             
+            # Save to database
+            if self.db_service:
+                try:
+                    conversation_data = {
+                        "conversation_id": session_id,
+                        "agent_id": agent_id,
+                        "session_id": session_id,
+                        "title": f"Chat with {agent_id}",
+                        "status": "active",
+                        "message_count": 1 if initial_message else 0,
+                        "metadata": context or {}
+                    }
+                    self.db_service.save_conversation(conversation_data)
+                    
+                    # Save initial message if provided
+                    if initial_message:
+                        message_data = {
+                            "message_id": conversation.messages[0].message_id,
+                            "conversation_id": session_id,
+                            "role": "user",
+                            "content": initial_message,
+                            "message_type": "text",
+                            "metadata": {"is_initial": True}
+                        }
+                        self.db_service.save_message(message_data)
+                    
+                    logger.debug(f"Saved conversation {session_id} to database")
+                except Exception as e:
+                    logger.error(f"Failed to save conversation to database: {e}")
+            
             # Store in memory for context
             if initial_message:
                 self.memory_manager.create_memory(
@@ -136,9 +168,55 @@ class ConversationManager:
             raise
     
     def get_conversation(self, session_id: str) -> Optional[Conversation]:
-        """Get conversation by session ID"""
+        """
+        Get conversation by session ID
+        Loads from database if not in memory
+        """
         with self._lock:
-            return self._conversations.get(session_id)
+            # Check memory first
+            conversation = self._conversations.get(session_id)
+            if conversation:
+                return conversation
+            
+            # Try to load from database
+            if self.db_service:
+                try:
+                    db_conv = self.db_service.get_conversation(session_id)
+                    if db_conv:
+                        # Load messages from database
+                        db_messages = self.db_service.get_conversation_messages(session_id)
+                        
+                        # Reconstruct conversation
+                        messages = []
+                        for db_msg in db_messages:
+                            message = Message(
+                                message_id=db_msg.message_id,
+                                role=MessageRole(db_msg.role),
+                                content=db_msg.content or "",
+                                metadata=db_msg.message_metadata or {},
+                                timestamp=db_msg.created_at
+                            )
+                            messages.append(message)
+                        
+                        conversation = Conversation(
+                            session_id=db_conv.conversation_id,
+                            user_id="default_user",  # You may want to store user_id in DB
+                            agent_id=db_conv.agent_id,
+                            messages=messages,
+                            created_at=db_conv.created_at,
+                            updated_at=db_conv.updated_at,
+                            is_active=db_conv.status == "active",
+                            metadata=db_conv.conversation_metadata or {}
+                        )
+                        
+                        # Store in memory
+                        self._conversations[session_id] = conversation
+                        logger.info(f"Loaded conversation {session_id} from database")
+                        return conversation
+                except Exception as e:
+                    logger.error(f"Error loading conversation from database: {e}")
+            
+            return None
     
     def add_message(self,
                    session_id: str,
@@ -174,6 +252,25 @@ class ConversationManager:
                 # Add to conversation
                 conversation.messages.append(message)
                 conversation.updated_at = datetime.now()
+                
+                # Save message to database
+                if self.db_service:
+                    try:
+                        message_data = {
+                            "message_id": message.message_id,
+                            "conversation_id": session_id,
+                            "role": role.value,
+                            "content": content,
+                            "message_type": metadata.get("message_type", "text") if metadata else "text",
+                            "tool_name": metadata.get("tool_name") if metadata else None,
+                            "tool_args": metadata.get("tool_args") if metadata else None,
+                            "tool_call_id": metadata.get("tool_call_id") if metadata else None,
+                            "metadata": metadata or {}
+                        }
+                        self.db_service.save_message(message_data)
+                        logger.debug(f"Saved message {message.message_id} to database")
+                    except Exception as e:
+                        logger.error(f"Failed to save message to database: {e}")
                 
                 # Store in memory for context
                 self.memory_manager.create_memory(

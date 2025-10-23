@@ -11,14 +11,12 @@ import {
 import { AgentService } from "@/services/agent.service";
 import { ChatService } from "@/services/chat.service";
 
-// Import components
+// Import new components
 import ChatHeader from "@/components/chat/ChatHeader";
 import ChatSidebar from "@/components/chat/ChatSidebar";
 import ChatMessageContainer from "@/components/chat/ChatMessage";
 import ChatInput from "@/components/chat/ChatInput";
 import EmptyState from "@/components/chat/EmptyState";
-import ChatDrawer from "@/components/chat/ChatDrawer";
-import { FaPause } from "react-icons/fa";
 
 export default function ChatPage() {
   const params = useParams();
@@ -35,37 +33,19 @@ export default function ChatPage() {
 
   // UI state
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
   const [conversations, setConversations] = useState<ChatSession[]>([]);
-
-  // Tool & Configuration state
-  const [availableTools, setAvailableTools] = useState<string[]>([]);
-  const [activeTools, setActiveTools] = useState<string[]>([]);
-  const [isReactMode, setIsReactMode] = useState(false);
-  const [plannerEnabled, setPlannerEnabled] = useState(false);
-  const [facebookConnected, setFacebookConnected] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadAgent();
     loadAvailableAgents();
-    loadAvailableTools();
-    loadConversations();
   }, [agentId]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  useEffect(() => {
-    if (agent) {
-      setActiveTools(agent.tools || []);
-      setIsReactMode(agent.agent_type === "react");
-      setPlannerEnabled(!!agent.planner);
-    }
-  }, [agent]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -90,25 +70,6 @@ export default function ChatPage() {
       setAvailableAgents(Array.isArray(agents) ? agents : []);
     } catch (error) {
       console.error("Failed to load available agents:", error);
-    }
-  };
-
-  const loadAvailableTools = async () => {
-    try {
-      const tools = await AgentService.getAvailableTools();
-      setAvailableTools(Array.isArray(tools) ? tools : []);
-    } catch (error) {
-      console.error("Failed to load available tools:", error);
-    }
-  };
-
-  const loadConversations = async () => {
-    try {
-      const convs = await ChatService.getConversations(agentId);
-      setConversations(convs);
-      console.log("Loaded conversations:", convs);
-    } catch (error) {
-      console.error("Failed to load conversations:", error);
     }
   };
 
@@ -157,20 +118,6 @@ export default function ChatPage() {
             }
             return updated;
           });
-        } else if (event.content && event.content.trim()) {
-          // Handle other event types (tool calls, tool responses, etc.)
-          const eventMessage: ChatMessage = {
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            type: "system",
-            content: event.content.trim(),
-            timestamp: new Date(),
-            eventType: event.type,
-            metadata: event.metadata,
-          };
-          setMessages((prev) => {
-            const updated = Array.isArray(prev) ? [...prev] : [];
-            return [...updated, eventMessage];
-          });
         } else if (event.type === StreamingEventType.COMPLETE) {
           setIsStreaming(false);
         } else if (event.type === StreamingEventType.ERROR) {
@@ -185,9 +132,6 @@ export default function ChatPage() {
         initialMessage,
         eventHandler
       );
-      
-      // Reload conversations list
-      await loadConversations();
     } catch (error) {
       console.error("Failed to start conversation:", error);
       setError(
@@ -199,6 +143,7 @@ export default function ChatPage() {
 
   const sendMessage = async (messageText: string) => {
     if (!session) {
+      // Start new conversation
       await startConversation(messageText);
       return;
     }
@@ -242,20 +187,6 @@ export default function ChatPage() {
             }
             return updated;
           });
-        } else if (event.content && event.content.trim()) {
-          // Handle other event types
-          const eventMessage: ChatMessage = {
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            type: "system",
-            content: event.content.trim(),
-            timestamp: new Date(),
-            eventType: event.type,
-            metadata: event.metadata,
-          };
-          setMessages((prev) => {
-            const updated = Array.isArray(prev) ? [...prev] : [];
-            return [...updated, eventMessage];
-          });
         } else if (event.type === StreamingEventType.COMPLETE) {
           setIsStreaming(false);
         } else if (event.type === StreamingEventType.ERROR) {
@@ -286,111 +217,8 @@ export default function ChatPage() {
     setSidebarOpen(false);
   };
 
-  const handleConversationSelect = async (conversationId: string) => {
-    try {
-      // Load conversation from API
-      const conversation = await ChatService.getConversation(conversationId);
-
-      // Set session
-      setSession({
-        id: conversation.session_id,
-        agent_id: conversation.agent_id,
-        user_id: conversation.user_id,
-        created_at: conversation.created_at,
-        updated_at: conversation.updated_at,
-        is_active: conversation.is_active,
-        messages: [],
-      });
-
-      // Transform and set messages
-      const transformedMessages = conversation.messages.map((msg: any) => ({
-        id: msg.message_id || `${Date.now()}-${Math.random()}`,
-        type: msg.role === "user" ? "user" : msg.role === "assistant" ? "assistant" : "system",
-        content: msg.content,
-        timestamp: new Date(msg.timestamp),
-        metadata: msg.metadata,
-      }));
-
-      setMessages(transformedMessages);
-
-      // Close sidebar
-      setSidebarOpen(false);
-    } catch (error) {
-      console.error("Failed to load conversation:", error);
-      setError("Failed to load conversation");
-    }
-  };
-
   const handleExampleClick = (example: string) => {
     sendMessage(example);
-  };
-
-  const toggleTool = async (toolName: string) => {
-    if (!agent) return;
-
-    try {
-      const isActive = activeTools.includes(toolName);
-
-      if (isActive) {
-        await AgentService.detachTools(agent.id, [toolName]);
-        setActiveTools((prev) => prev.filter((t) => t !== toolName));
-      } else {
-        await AgentService.attachTools(agent.id, [toolName]);
-        setActiveTools((prev) => [...prev, toolName]);
-      }
-
-      await loadAgent();
-    } catch (error) {
-      console.error("Failed to toggle tool:", error);
-      setError(
-        error instanceof Error ? error.message : "Failed to update tool"
-      );
-    }
-  };
-
-  const updateAgentConfig = async (config: {
-    agent_type?: string;
-    planner?: string;
-  }) => {
-    if (!agent) return;
-
-    try {
-      await AgentService.updateAgentConfig(agent.id, config);
-      await loadAgent();
-    } catch (error) {
-      console.error("Failed to update agent config:", error);
-      setError(
-        error instanceof Error ? error.message : "Failed to update agent"
-      );
-    }
-  };
-
-  const toggleReactMode = async () => {
-    // When enabling ReAct mode, use PlanReActPlanner
-    // When disabling, remove both agent_type and planner
-    const newMode = isReactMode ? undefined : "react";
-    await updateAgentConfig({
-      agent_type: newMode,
-      planner: newMode === "react" ? "PlanReActPlanner" : undefined,
-    });
-  };
-
-  const togglePlanner = async () => {
-    // This is now handled by toggleReactMode
-    // Keep for backward compatibility but it does the same as toggleReactMode
-    await toggleReactMode();
-  };
-
-  const stopStreaming = async () => {
-    if (agent && isStreaming) {
-      try {
-        await AgentService.stopStreaming(agent.id);
-        setIsStreaming(false);
-      } catch (error) {
-        console.error("Failed to stop streaming:", error);
-        setError("Failed to stop streaming");
-      }
-    }
   };
 
   if (loading) {
@@ -433,7 +261,7 @@ export default function ChatPage() {
         currentAgentId={agentId}
         onAgentSelect={handleAgentSelect}
         onNewChat={handleNewChat}
-        onConversationSelect={handleConversationSelect}
+        onConversationSelect={(id) => console.log("Load conversation:", id)}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
@@ -441,17 +269,7 @@ export default function ChatPage() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <ChatHeader
-          agent={agent}
-          availableAgents={availableAgents}
-          onMenuClick={() => setSidebarOpen(true)}
-          onSettingsClick={() => setDrawerOpen(true)}
-          onAgentSelect={handleAgentSelect}
-          isReactMode={isReactMode}
-          plannerEnabled={plannerEnabled}
-          activeToolsCount={activeTools.length}
-          facebookConnected={facebookConnected}
-        />
+        <ChatHeader agent={agent} onMenuClick={() => setSidebarOpen(true)} />
 
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto">
@@ -468,31 +286,22 @@ export default function ChatPage() {
 
               {/* Streaming Indicator */}
               {isStreaming && (
-                <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                  <div className="flex items-center space-x-2 text-gray-600">
-                    <div className="flex space-x-1">
-                      <div
-                        className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
-                        style={{ animationDelay: "0ms" }}
-                      ></div>
-                      <div
-                        className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
-                        style={{ animationDelay: "150ms" }}
-                      ></div>
-                      <div
-                        className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
-                        style={{ animationDelay: "300ms" }}
-                      ></div>
-                    </div>
-                    <span className="text-sm font-medium">Thinking...</span>
+                <div className="flex items-center space-x-2 text-gray-400 ml-11">
+                  <div className="flex space-x-1">
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "0ms" }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "150ms" }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "300ms" }}
+                    ></div>
                   </div>
-                  <button
-                    onClick={stopStreaming}
-                    className="flex items-center space-x-1 px-3 py-1 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
-                  >
-                    <FaPause />
-                    <span>Stop</span>
-                  </button>
+                  <span className="text-sm">Thinking...</span>
                 </div>
               )}
 
@@ -523,23 +332,6 @@ export default function ChatPage() {
           modelName={agent?.name || "AI Assistant"}
         />
       </div>
-
-      {/* Settings Drawer */}
-      <ChatDrawer
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        agent={agent}
-        availableTools={availableTools}
-        activeTools={activeTools}
-        onToggleTool={toggleTool}
-        isReactMode={isReactMode}
-        plannerEnabled={plannerEnabled}
-        onToggleReactMode={toggleReactMode}
-        onTogglePlanner={togglePlanner}
-        agentId={agentId}
-        sessionId={session?.id}
-        onFacebookConnectionChange={setFacebookConnected}
-      />
     </div>
   );
 }

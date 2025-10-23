@@ -27,6 +27,7 @@ from managers.team_manager import TeamManager
 from managers.conversation_manager import ConversationManager
 from managers.streaming_handler import StreamingHandler
 from auth.auth_manager import AuthManager
+from services.database_service import DatabaseService
 from models.api_models import *
 from config.settings import Settings
 
@@ -42,6 +43,7 @@ team_manager = None
 conversation_manager = None
 streaming_handler = None
 auth_manager = None
+database_service = None
 
 
 @asynccontextmanager
@@ -57,23 +59,34 @@ async def lifespan(app: FastAPI):
     
     # Core managers
     global agent_manager, tool_manager, memory_manager, team_manager
-    global conversation_manager, streaming_handler, auth_manager
+    global conversation_manager, streaming_handler, auth_manager, database_service
+    
+    # Initialize database service first
+    try:
+        database_service = DatabaseService()
+        logger.info("✅ Database service initialized")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize database service: {e}")
+        logger.warning("⚠️  Continuing without database persistence")
+        database_service = None
     
     tool_manager = ToolManager()
     memory_manager = MemoryManager()
-    agent_manager = AgentManager(tool_manager, memory_manager)
+    agent_manager = AgentManager(tool_manager, memory_manager, database_service)
     team_manager = TeamManager(agent_manager)
     streaming_handler = StreamingHandler(agent_manager=agent_manager)
     conversation_manager = ConversationManager(
         agent_manager=agent_manager,
         memory_manager=memory_manager,
-        streaming_handler=streaming_handler
+        streaming_handler=streaming_handler,
+        database_service=database_service
     )
     auth_manager = AuthManager()
     
     # Store in global managers
     managers.update({
         "settings": settings,
+        "database_service": database_service,
         "tool_manager": tool_manager,
         "memory_manager": memory_manager,
         "agent_manager": agent_manager,
@@ -132,6 +145,9 @@ def get_streaming_handler() -> StreamingHandler:
 
 def get_auth_manager() -> AuthManager:
     return managers["auth_manager"]
+
+def get_database_service() -> DatabaseService:
+    return managers.get("database_service")
 
 
 # Health check

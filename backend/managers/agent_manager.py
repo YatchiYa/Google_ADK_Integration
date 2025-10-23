@@ -66,16 +66,18 @@ class AgentManager:
     Handles agent creation, configuration, and lifecycle
     """
     
-    def __init__(self, tool_manager, memory_manager):
+    def __init__(self, tool_manager, memory_manager, database_service=None):
         """
         Initialize agent manager
         
         Args:
             tool_manager: Tool manager instance
             memory_manager: Memory manager instance
+            database_service: Database service instance for persistence
         """
         self.tool_manager = tool_manager
         self.memory_manager = memory_manager
+        self.db_service = database_service
         
         self._agents: Dict[str, AgentInfo] = {}
         self._agent_instances: Dict[str, LlmAgent] = {}
@@ -85,8 +87,12 @@ class AgentManager:
         self._agent_creation_count = 0
         self._agent_usage_stats = {}
         
+        # Load agents from database if available
+        if self.db_service:
+            self._load_agents_from_db()
+        
         logger.info("Agent manager initialized")
-        logger.debug(f"DEBUG: AgentManager.__init__ - Tool manager: {type(tool_manager)}, Memory manager: {type(memory_manager)}")
+        logger.debug(f"DEBUG: AgentManager.__init__ - Tool manager: {type(tool_manager)}, Memory manager: {type(memory_manager)}, DB: {database_service is not None}")
 
     def create_agent(self,
                     name: str,
@@ -118,21 +124,21 @@ class AgentManager:
             self._agent_creation_count += 1
             creation_id = f"creation_{self._agent_creation_count}"
             
-            logger.debug(f"DEBUG: create_agent ({creation_id}) - Starting agent creation")
-            logger.debug(f"DEBUG: create_agent ({creation_id}) - Input params: name='{name}', agent_type='{agent_type}', tools={tools}, sub_agents={sub_agents}")
-            logger.debug(f"DEBUG: create_agent ({creation_id}) - Persona: {persona.name} - {persona.description}")
+            # logger.debug(f"DEBUG: create_agent ({creation_id}) - Starting agent creation")
+            # logger.debug(f"DEBUG: create_agent ({creation_id}) - Input params: name='{name}', agent_type='{agent_type}', tools={tools}, sub_agents={sub_agents}")
+            # logger.debug(f"DEBUG: create_agent ({creation_id}) - Persona: {persona.name} - {persona.description}")
             
             # Generate agent ID
             if not agent_id:
                 agent_id = f"agent_{uuid.uuid4().hex[:8]}"
             
-            logger.debug(f"DEBUG: create_agent ({creation_id}) - Generated agent_id: {agent_id}")
+            # logger.debug(f"DEBUG: create_agent ({creation_id}) - Generated agent_id: {agent_id}")
             
             # Use default config if not provided
             if not config:
                 config = AgentConfig()
             
-            logger.debug(f"DEBUG: create_agent ({creation_id}) - Config: model={config.model}, temp={config.temperature}, max_tokens={config.max_output_tokens}")
+            # logger.debug(f"DEBUG: create_agent ({creation_id}) - Config: model={config.model}, temp={config.temperature}, max_tokens={config.max_output_tokens}")
             
             # Create agent info
             agent_info = AgentInfo(
@@ -144,18 +150,18 @@ class AgentManager:
                 tools=tools or []
             )
             
-            logger.debug(f"DEBUG: create_agent ({creation_id}) - AgentInfo created: {agent_info.agent_id}")
+            # logger.debug(f"DEBUG: create_agent ({creation_id}) - AgentInfo created: {agent_info.agent_id}")
             
             # Build instruction from persona
             instruction = self._build_instruction(persona)
-            logger.debug(f"DEBUG: create_agent ({creation_id}) - Built instruction length: {len(instruction)}")
+            # logger.debug(f"DEBUG: create_agent ({creation_id}) - Built instruction length: {len(instruction)}")
             
             # Get tools from registry (including agent tools)
             agent_tools = []
             if tools:
                 logger.debug(f"DEBUG: create_agent ({creation_id}) - Requesting tools: {tools}")
                 agent_tools = self.tool_manager.get_tools_for_agent(tools, agent_manager=self)
-                logger.debug(f"DEBUG: create_agent ({creation_id}) - Retrieved {len(agent_tools)} tools: {[getattr(t, 'name', str(t)) for t in agent_tools]}")
+                # logger.debug(f"DEBUG: create_agent ({creation_id}) - Retrieved {len(agent_tools)} tools: {[getattr(t, 'name', str(t)) for t in agent_tools]}")
             
             # Create generate content config
             generate_config = types.GenerateContentConfig(
@@ -386,6 +392,21 @@ You have advanced thinking capabilities. Use your internal reasoning to plan and
                     "has_planner": planner is not None
                 }
             
+            # Save to database
+            if self.db_service:
+                try:
+                    # Store agent type and planner in metadata
+                    agent_info.metadata["agent_type"] = agent_type or "regular"
+                    agent_info.metadata["planner"] = planner
+                    agent_info.metadata["output_key"] = output_key
+                    if sub_agents:
+                        agent_info.metadata["sub_agents"] = sub_agents
+                    
+                    self._save_agent_to_db(agent_info)
+                    logger.info(f"Agent {agent_id} saved to database")
+                except Exception as e:
+                    logger.error(f"Failed to save agent {agent_id} to database: {e}")
+            
             logger.debug(f"DEBUG: create_agent ({creation_id}) - Agent stored successfully")
             logger.debug(f"DEBUG: create_agent ({creation_id}) - Total agents in registry: {len(self._agents)}")
             
@@ -396,8 +417,114 @@ You have advanced thinking capabilities. Use your internal reasoning to plan and
             logger.error(f"Failed to create agent '{name}': {e}")
             raise
 
+    def _initialize_agent(self, agent_id: str, name: str, persona: AgentPersona, 
+                          config: AgentConfig, tools: List[str], planner: Optional[str] = None,
+                          agent_type: Optional[str] = None, sub_agents: Optional[List[str]] = None) -> Optional[LlmAgent]:
+        """Initialize an agent instance from stored configuration"""
+        try:
+            logger.info(f"Initializing agent {agent_id}")
+            
+            # Build instruction from persona
+            instruction = self._build_instruction(persona)
+            
+            # Get tools from registry
+            agent_tools = []
+            if tools:
+                agent_tools = self.tool_manager.get_tools_for_agent(tools, agent_manager=self)
+            
+            # Create generate content config
+            generate_config = types.GenerateContentConfig(
+                temperature=config.temperature,
+                max_output_tokens=config.max_output_tokens,
+                top_p=config.top_p,
+                top_k=config.top_k,
+                safety_settings=config.safety_settings or []
+            )
+            
+            # Create LLM model
+            if config.model.startswith(("openai/", "anthropic/", "ollama/")):
+                model = LiteLlm(model=config.model)
+            else:
+                model = config.model
+            
+            # Create planner if specified
+            planner_instance = None
+            if planner == "PlanReActPlanner":
+                from google.adk.planners import PlanReActPlanner
+                planner_instance = PlanReActPlanner()
+                logger.info(f"Adding PlanReActPlanner to agent {agent_id}")
+            elif planner == "BuiltInPlanner":
+                from google.adk.planners import BuiltInPlanner
+                thinking_budget = 1024 if len(agent_tools) > 3 else 512
+                planner_instance = BuiltInPlanner(
+                    thinking_config=types.ThinkingConfig(
+                        include_thoughts=True,
+                        thinking_budget=thinking_budget
+                    )
+                )
+                logger.info(f"Adding BuiltInPlanner to agent {agent_id}")
+            
+            # Enhance instruction for planner
+            if planner_instance:
+                if planner == "PlanReActPlanner":
+                    enhanced_instruction = f"""{instruction}
+
+IMPORTANT: You MUST follow the ReAct methodology structure in your responses:
+
+/*PLANNING*/
+Create a detailed step-by-step plan for the task
+
+/*ACTION*/
+Execute the planned actions using available tools
+
+/*REASONING*/
+Explain your reasoning and observations from the actions
+
+/*FINAL_ANSWER*/
+Provide a comprehensive final answer based on your analysis
+
+Always think systematically and use tools strategically."""
+                else:
+                    enhanced_instruction = f"""{instruction}
+
+You have advanced thinking capabilities. Use your internal reasoning to plan and structure your approach before responding."""
+            else:
+                enhanced_instruction = instruction
+            
+            # Create agent
+            if planner_instance:
+                adk_agent = LlmAgent(
+                    model=model,
+                    name=agent_id,
+                    description=persona.description,
+                    instruction=enhanced_instruction,
+                    tools=agent_tools,
+                    generate_content_config=generate_config,
+                    planner=planner_instance,
+                    output_key=f"{agent_id}_response"
+                )
+            else:
+                adk_agent = LlmAgent(
+                    model=model,
+                    name=agent_id,
+                    description=persona.description,
+                    instruction=enhanced_instruction,
+                    tools=agent_tools,
+                    generate_content_config=generate_config,
+                    output_key=f"{agent_id}_response"
+                )
+            
+            logger.info(f"Successfully initialized agent {agent_id}")
+            return adk_agent
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize agent {agent_id}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
+
     def get_agent(self, agent_id: str) -> Optional[LlmAgent]:
-        """Get agent instance by ID"""
+        """Get agent instance by ID - auto-initializes if needed"""
         with self._lock:
             logger.debug(f"DEBUG: get_agent - Looking for agent {agent_id}")
             logger.debug(f"DEBUG: get_agent - Available instances: {list(self._agent_instances.keys())}")
@@ -417,7 +544,44 @@ You have advanced thinking capabilities. Use your internal reasoning to plan and
                 
                 return agent_instance
             
-            logger.debug(f"DEBUG: get_agent - Agent {agent_id} not found in instances")
+            # Agent not in instances but exists in agent_infos - try to initialize it
+            if agent_id in self._agents:
+                logger.info(f"Agent {agent_id} exists but not initialized - initializing now")
+                agent_info = self._agents[agent_id]
+                
+                try:
+                    # Initialize the agent
+                    agent_instance = self._initialize_agent(
+                        agent_id=agent_id,
+                        name=agent_info.name,
+                        persona=agent_info.persona,
+                        config=agent_info.config,
+                        tools=agent_info.tools,
+                        planner=agent_info.metadata.get("planner"),
+                        agent_type=agent_info.metadata.get("agent_type"),
+                        sub_agents=agent_info.metadata.get("sub_agents", [])
+                    )
+                    
+                    if agent_instance:
+                        self._agent_instances[agent_id] = agent_instance
+                        logger.info(f"Successfully initialized agent {agent_id}")
+                        
+                        # Update usage stats
+                        agent_info.usage_count += 1
+                        agent_info.last_used = datetime.now()
+                        
+                        return agent_instance
+                    else:
+                        logger.error(f"Failed to initialize agent {agent_id}")
+                        return None
+                        
+                except Exception as e:
+                    logger.error(f"Error initializing agent {agent_id}: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    return None
+            
+            logger.debug(f"DEBUG: get_agent - Agent {agent_id} not found")
             return None
 
     def get_agent_info(self, agent_id: str) -> Optional[AgentInfo]:
@@ -483,7 +647,7 @@ You have advanced thinking capabilities. Use your internal reasoning to plan and
             return False
 
     def update_agent_tools(self, agent_id: str, tools: List[str]) -> bool:
-        """Update agent tools"""
+        """Update agent tools and save to database"""
         try:
             with self._lock:
                 agent_info = self._agents.get(agent_id)
@@ -492,6 +656,10 @@ You have advanced thinking capabilities. Use your internal reasoning to plan and
                 
                 # Update tools
                 agent_info.tools = tools
+                
+                # Save to database
+                if self.db_service:
+                    self.db_service.update_agent(agent_id, {"tools": tools})
                 
                 # Recreate agent with new tools
                 self._recreate_agent(agent_id)
@@ -721,16 +889,16 @@ You have advanced thinking capabilities. Use your internal reasoning to plan and
         
         # Basic persona
         instruction_parts.append(f"You are {persona.name}.")
-        instruction_parts.append(persona.description)
+        # instruction_parts.append(persona.description)
         
         # Personality
         if persona.personality:
             instruction_parts.append(f"Your personality: {persona.personality}")
         
         # Expertise
-        if persona.expertise:
-            expertise_str = ", ".join(persona.expertise)
-            instruction_parts.append(f"Your areas of expertise: {expertise_str}")
+        # if persona.expertise:
+        #     expertise_str = ", ".join(persona.expertise)
+        #     instruction_parts.append(f"Your areas of expertise: {expertise_str}")
         
         # Communication style
         if persona.communication_style:
@@ -745,12 +913,12 @@ You have advanced thinking capabilities. Use your internal reasoning to plan and
             instruction_parts.append(persona.custom_instructions)
         
         # Examples
-        if persona.examples:
-            instruction_parts.append("\nExamples:")
-            for i, example in enumerate(persona.examples, 1):
-                instruction_parts.append(f"Example {i}:")
-                instruction_parts.append(f"User: {example.get('user', '')}")
-                instruction_parts.append(f"Assistant: {example.get('assistant', '')}")
+        # if persona.examples:
+        #     instruction_parts.append("\nExamples:")
+        #     for i, example in enumerate(persona.examples, 1):
+        #         instruction_parts.append(f"Example {i}:")
+        #         instruction_parts.append(f"User: {example.get('user', '')}")
+        #         instruction_parts.append(f"Assistant: {example.get('assistant', '')}")
         
         return "\n\n".join(instruction_parts)
 
@@ -867,3 +1035,227 @@ You have advanced thinking capabilities. Use your internal reasoning to plan and
         except Exception as e:
             logger.error(f"Failed to create team agent for {team_id}: {e}")
             raise
+    
+    # ==================== DATABASE PERSISTENCE METHODS ====================
+    
+    def _load_agents_from_db(self):
+        """Load all agents from database into memory"""
+        try:
+            if not self.db_service:
+                return
+            
+            db_agents = self.db_service.get_all_agents(include_inactive=False)
+            logger.info(f"Loading {len(db_agents)} agents from database")
+            
+            for db_agent in db_agents:
+                try:
+                    # Reconstruct AgentPersona
+                    persona = AgentPersona(
+                        name=db_agent.persona_name or db_agent.name,
+                        description=db_agent.persona_description or db_agent.description,
+                        personality=db_agent.persona_personality or "professional",
+                        expertise=db_agent.persona_expertise or [],
+                        communication_style=db_agent.persona_communication_style or "professional",
+                        language=db_agent.persona_language or "en",
+                        custom_instructions=db_agent.persona_custom_instructions or "",
+                        examples=db_agent.persona_examples or []
+                    )
+                    
+                    # Reconstruct AgentConfig
+                    config_data = db_agent.config or {}
+                    config = AgentConfig(
+                        model=config_data.get("model", "gemini-2.0-flash"),
+                        temperature=config_data.get("temperature", 0.7),
+                        max_output_tokens=config_data.get("max_output_tokens", 2048),
+                        top_p=config_data.get("top_p", 0.9),
+                        top_k=config_data.get("top_k", 40),
+                        safety_settings=config_data.get("safety_settings"),
+                        timeout_seconds=config_data.get("timeout_seconds", 30),
+                        retry_attempts=config_data.get("retry_attempts", 3)
+                    )
+                    
+                    # Create AgentInfo
+                    agent_info = AgentInfo(
+                        agent_id=db_agent.agent_id,
+                        name=db_agent.name,
+                        description=db_agent.description,
+                        persona=persona,
+                        config=config,
+                        tools=db_agent.tools or [],
+                        created_at=db_agent.created_at,
+                        last_used=db_agent.last_used,
+                        usage_count=db_agent.usage_count,
+                        is_active=db_agent.is_active,
+                        version=db_agent.version,
+                        metadata=db_agent.agent_metadata or {}
+                    )
+                    
+                    # Store in memory (but don't create ADK instance yet - lazy loading)
+                    self._agents[db_agent.agent_id] = agent_info
+                    logger.debug(f"Loaded agent from DB: {db_agent.agent_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Error loading agent {db_agent.agent_id} from DB: {e}")
+                    continue
+            
+            logger.info(f"Successfully loaded {len(self._agents)} agents from database")
+            
+        except Exception as e:
+            logger.error(f"Error loading agents from database: {e}")
+    
+    def _save_agent_to_db(self, agent_info: AgentInfo):
+        """Save agent to database"""
+        try:
+            if not self.db_service:
+                return
+            
+            # Prepare agent data for database
+            agent_data = {
+                "agent_id": agent_info.agent_id,
+                "name": agent_info.name,
+                "description": agent_info.description,
+                "agent_type": agent_info.metadata.get("agent_type", "regular"),
+                "persona_name": agent_info.persona.name,
+                "persona_description": agent_info.persona.description,
+                "persona_personality": agent_info.persona.personality,
+                "persona_expertise": agent_info.persona.expertise,
+                "persona_communication_style": agent_info.persona.communication_style,
+                "persona_language": agent_info.persona.language,
+                "persona_custom_instructions": agent_info.persona.custom_instructions,
+                "persona_examples": agent_info.persona.examples,
+                "config": {
+                    "model": agent_info.config.model,
+                    "temperature": agent_info.config.temperature,
+                    "max_output_tokens": agent_info.config.max_output_tokens,
+                    "top_p": agent_info.config.top_p,
+                    "top_k": agent_info.config.top_k,
+                    "timeout_seconds": agent_info.config.timeout_seconds,
+                    "retry_attempts": agent_info.config.retry_attempts
+                },
+                "tools": agent_info.tools,
+                "sub_agents": agent_info.metadata.get("sub_agents"),
+                "planner": agent_info.metadata.get("planner"),
+                "output_key": agent_info.metadata.get("output_key"),
+                "version": agent_info.version,
+                "is_active": agent_info.is_active,
+                "usage_count": agent_info.usage_count,
+                "created_at": agent_info.created_at,
+                "last_used": agent_info.last_used,
+                "agent_metadata": agent_info.metadata
+            }
+            
+            self.db_service.save_agent(agent_data)
+            logger.debug(f"Saved agent to DB: {agent_info.agent_id}")
+            
+        except Exception as e:
+            logger.error(f"Error saving agent {agent_info.agent_id} to database: {e}")
+    
+    def ensure_agent_instance(self, agent_id: str) -> Optional[LlmAgent]:
+        """
+        Ensure agent instance exists, create if needed (lazy loading)
+        
+        Args:
+            agent_id: Agent ID
+            
+        Returns:
+            Optional[LlmAgent]: Agent instance or None
+        """
+        # Check if instance already exists
+        if agent_id in self._agent_instances:
+            return self._agent_instances[agent_id]
+        
+        # Check if agent info exists
+        agent_info = self._agents.get(agent_id)
+        if not agent_info:
+            # Try to load from database
+            if self.db_service:
+                db_agent = self.db_service.get_agent(agent_id)
+                if db_agent:
+                    # Reconstruct agent info
+                    persona = AgentPersona(
+                        name=db_agent.persona_name or db_agent.name,
+                        description=db_agent.persona_description or db_agent.description,
+                        personality=db_agent.persona_personality or "professional",
+                        expertise=db_agent.persona_expertise or [],
+                        communication_style=db_agent.persona_communication_style or "professional",
+                        language=db_agent.persona_language or "en",
+                        custom_instructions=db_agent.persona_custom_instructions or "",
+                        examples=db_agent.persona_examples or []
+                    )
+                    
+                    config_data = db_agent.config or {}
+                    config = AgentConfig(
+                        model=config_data.get("model", "gemini-2.0-flash"),
+                        temperature=config_data.get("temperature", 0.7),
+                        max_output_tokens=config_data.get("max_output_tokens", 2048),
+                        top_p=config_data.get("top_p", 0.9),
+                        top_k=config_data.get("top_k", 40),
+                        timeout_seconds=config_data.get("timeout_seconds", 30),
+                        retry_attempts=config_data.get("retry_attempts", 3)
+                    )
+                    
+                    agent_info = AgentInfo(
+                        agent_id=db_agent.agent_id,
+                        name=db_agent.name,
+                        description=db_agent.description,
+                        persona=persona,
+                        config=config,
+                        tools=db_agent.tools or [],
+                        created_at=db_agent.created_at,
+                        last_used=db_agent.last_used,
+                        usage_count=db_agent.usage_count,
+                        is_active=db_agent.is_active,
+                        version=db_agent.version,
+                        metadata=db_agent.agent_metadata or {}
+                    )
+                    
+                    self._agents[agent_id] = agent_info
+                    logger.info(f"Loaded agent {agent_id} from database on-demand")
+                else:
+                    logger.warning(f"Agent {agent_id} not found in memory or database")
+                    return None
+            else:
+                logger.warning(f"Agent {agent_id} not found and no database service available")
+                return None
+        
+        # Create ADK agent instance
+        try:
+            instruction = self._build_instruction(agent_info.persona)
+            agent_tools = []
+            if agent_info.tools:
+                agent_tools = self.tool_manager.get_tools_for_agent(agent_info.tools, agent_manager=self)
+            
+            generate_config = types.GenerateContentConfig(
+                temperature=agent_info.config.temperature,
+                max_output_tokens=agent_info.config.max_output_tokens,
+                top_p=agent_info.config.top_p,
+                top_k=agent_info.config.top_k,
+                safety_settings=agent_info.config.safety_settings or []
+            )
+            
+            if agent_info.config.model.startswith(("openai/", "anthropic/", "ollama/")):
+                model = LiteLlm(model=agent_info.config.model)
+            else:
+                model = agent_info.config.model
+            
+            adk_agent = LlmAgent(
+                model=model,
+                name=agent_info.name,
+                description=agent_info.description,
+                instruction=instruction,
+                tools=agent_tools,
+                generate_content_config=generate_config
+            )
+            
+            self._agent_instances[agent_id] = adk_agent
+            logger.info(f"Created ADK instance for agent {agent_id}")
+            
+            # Update usage stats
+            if self.db_service:
+                self.db_service.update_agent_usage(agent_id)
+            
+            return adk_agent
+            
+        except Exception as e:
+            logger.error(f"Error creating agent instance for {agent_id}: {e}")
+            return None

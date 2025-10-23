@@ -119,13 +119,19 @@ async def start_streaming_conversation(
             session_id=request.session_id
         )
         
-        # Get agent for streaming
+        # Get agent for streaming (with lazy loading from database if needed)
         from main import managers
         agent_manager = managers["agent_manager"]
-        agent = agent_manager.get_agent(request.agent_id)
+        
+        # Try to ensure agent instance exists (loads from DB if needed)
+        agent = agent_manager.ensure_agent_instance(request.agent_id)
         
         if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
+            # Fallback to regular get_agent
+            agent = agent_manager.get_agent(request.agent_id)
+        
+        if not agent:
+            raise HTTPException(status_code=404, detail=f"Agent {request.agent_id} not found")
         
         async def generate_response():
             """Generate streaming response"""

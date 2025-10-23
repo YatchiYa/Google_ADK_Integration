@@ -135,6 +135,57 @@ class ChatServiceClass {
     return data.messages || [];
   }
 
+  async getConversations(agentId: string): Promise<ChatSession[]> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/conversations/agent/${agentId}`,
+        {
+          headers: AuthService.getAuthHeaders(),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to load conversations");
+      }
+
+      const data = await response.json();
+
+      // Transform to ChatSession format
+      return (data.conversations || []).map((conv: any) => ({
+        id: conv.session_id,
+        agent_id: conv.agent_id,
+        user_id: conv.user_id,
+        created_at: conv.created_at,
+        updated_at: conv.updated_at,
+        is_active: conv.is_active,
+        messages: conv.messages || [],
+      }));
+    } catch (error) {
+      console.error("Error loading conversations:", error);
+      return [];
+    }
+  }
+
+  async getConversation(conversationId: string): Promise<any> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/conversations/${conversationId}`,
+        {
+          headers: AuthService.getAuthHeaders(),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to load conversation");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error loading conversation:", error);
+      throw error;
+    }
+  }
+
   async endConversation(sessionId: string): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/api/v1/conversations/${sessionId}/end`, {
       method: 'POST',

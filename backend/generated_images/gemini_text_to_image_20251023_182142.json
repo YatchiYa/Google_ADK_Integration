@@ -1,0 +1,16 @@
+{
+  "filename": "gemini_text_to_image_20251023_182142.png",
+  "timestamp": "2025-10-23T18:21:43.190563",
+  "model_id": "gemini-2.5-flash-image-preview",
+  "prompt": "A panda in outer space, preparing to eat food",
+  "generation_type": "text_to_image",
+  "temperature": 1,
+  "input_image_path": null,
+  "additional_image_paths": null,
+  "local_path": "generated_images/gemini_text_to_image_20251023_182142.png",
+  "additional_generated_paths": [],
+  "text_responses": [
+    "Here's a panda in space, ready for a meal! "
+  ],
+  "total_images_generated": 1
+}
