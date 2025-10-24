@@ -143,6 +143,40 @@ class DatabaseService:
         finally:
             session.close()
     
+    def update_agent(self, agent_id: str, updates: dict) -> bool:
+        """
+        Update agent fields in database
+        
+        Args:
+            agent_id: Agent ID
+            updates: Dictionary of fields to update
+            
+        Returns:
+            bool: Success status
+        """
+        session = self.get_session()
+        try:
+            agent = session.query(AgentDB).filter(AgentDB.agent_id == agent_id).first()
+            if not agent:
+                logger.warning(f"Agent {agent_id} not found for update")
+                return False
+            
+            # Update allowed fields
+            for key, value in updates.items():
+                if hasattr(agent, key):
+                    setattr(agent, key, value)
+                    logger.debug(f"Updated agent {agent_id} field '{key}' to: {value}")
+            
+            session.commit()
+            logger.info(f"Updated agent {agent_id} with fields: {list(updates.keys())}")
+            return True
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error updating agent {agent_id}: {e}")
+            raise
+        finally:
+            session.close()
+    
     def delete_agent(self, agent_id: str) -> bool:
         """
         Delete an agent (soft delete by setting is_active=False)

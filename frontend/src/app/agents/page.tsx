@@ -17,6 +17,7 @@ import {
   FaTimes,
   FaEdit,
   FaComments,
+  FaTrash,
   FaGoogle,
   FaDatabase,
   FaCode,
@@ -55,6 +56,8 @@ export default function AgentsPage() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showAgentModal, setShowAgentModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Tool icon mapping
   const getToolIcon = (toolName: string) => {
@@ -180,19 +183,43 @@ export default function AgentsPage() {
   };
 
   const handleEditAgent = (agentId: string) => {
-    router.push(`/agents/${agentId}/edit`);
+    const agent = agents.find(a => a.id === agentId);
+    if (agent) {
+      setEditingAgent(agent);
+      setShowCreateModal(true);
+    }
   };
 
   const handleDeleteAgent = async (agentId: string) => {
-    if (!confirm("Are you sure you want to delete this agent?")) return;
+    if (!confirm("Are you sure you want to delete this agent? This action cannot be undone.")) {
+      return;
+    }
 
+    setDeletingId(agentId);
     try {
       await AgentService.deleteAgent(agentId);
-      setAgents((prev) => prev.filter((agent) => agent.id !== agentId));
+      setAgents(prev => prev.filter(a => a.id !== agentId));
+      if (selectedAgent?.id === agentId) {
+        setShowAgentModal(false);
+        setSelectedAgent(null);
+      }
     } catch (error) {
       console.error("Failed to delete agent:", error);
-      alert("Failed to delete agent. Please try again.");
+      setError("Failed to delete agent");
+    } finally {
+      setDeletingId(null);
     }
+  };
+
+  const handleModalClose = () => {
+    setShowCreateModal(false);
+    setEditingAgent(null);
+  };
+
+  const handleAgentCreatedOrUpdated = async () => {
+    setShowCreateModal(false);
+    setEditingAgent(null);
+    await loadAgents();
   };
 
   const handleAgentClick = (agent: Agent) => {
@@ -478,6 +505,21 @@ export default function AgentsPage() {
                       >
                         <FaComments className="text-xs" />
                       </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteAgent(agent.id);
+                        }}
+                        disabled={deletingId === agent.id}
+                        className="p-1 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                        title="Delete agent"
+                      >
+                        {deletingId === agent.id ? (
+                          <div className="w-3 h-3 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <FaTrash className="text-xs" />
+                        )}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -620,37 +662,60 @@ export default function AgentsPage() {
               </div>
 
               {/* Modal Actions */}
-              <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
                 <button
                   onClick={() => {
                     handleCloseModal();
-                    handleEditAgent(selectedAgent.id);
+                    handleDeleteAgent(selectedAgent.id);
                   }}
-                  className="px-4 py-2 text-gray-600 hover:text-blue-600 transition-colors flex items-center space-x-2"
+                  disabled={deletingId === selectedAgent.id}
+                  className="px-4 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center space-x-2 disabled:opacity-50"
                 >
-                  <FaEdit className="text-sm" />
-                  <span>Edit</span>
+                  {deletingId === selectedAgent.id ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaTrash className="text-sm" />
+                      <span>Delete</span>
+                    </>
+                  )}
                 </button>
-                <button
-                  onClick={() => {
-                    handleCloseModal();
-                    handleStartChat(selectedAgent.id);
-                  }}
-                  className="bg-gradient-to-r from-blue-500 to-sky-600 hover:from-blue-600 hover:to-sky-700 text-white px-6 py-2 rounded-lg font-medium shadow-md transition-all duration-200 flex items-center space-x-2"
-                >
-                  <FaComments className="text-sm" />
-                  <span>Start Chat</span>
-                </button>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => {
+                      handleCloseModal();
+                      handleEditAgent(selectedAgent.id);
+                    }}
+                    className="px-4 py-2 text-gray-600 hover:text-blue-600 transition-colors flex items-center space-x-2"
+                  >
+                    <FaEdit className="text-sm" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleCloseModal();
+                      handleStartChat(selectedAgent.id);
+                    }}
+                    className="bg-gradient-to-r from-blue-500 to-sky-600 hover:from-blue-600 hover:to-sky-700 text-white px-6 py-2 rounded-lg font-medium shadow-md transition-all duration-200 flex items-center space-x-2"
+                  >
+                    <FaComments className="text-sm" />
+                    <span>Start Chat</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Create Agent Modal */}
+        {/* Create/Edit Agent Modal */}
         {showCreateModal && (
           <CreateAgentModal
-            onClose={() => setShowCreateModal(false)}
-            onAgentCreated={handleAgentCreated}
+            onClose={handleModalClose}
+            onAgentCreated={handleAgentCreatedOrUpdated}
+            editingAgent={editingAgent}
           />
         )}
       </main>

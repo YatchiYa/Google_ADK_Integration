@@ -500,7 +500,9 @@ class ToolManager:
                     text_analyzer,
                     product_hunt_search,
                     yahoo_finance_data,
-                    call_document_rag_code_civile_algerian
+                    call_document_rag_code_civile_algerian,
+                    call_document_rag_code_civile_algerian_streaming,
+                    llamaindex_document_rag
                 )
                 
                 # Register Gemini image tools
@@ -552,6 +554,7 @@ class ToolManager:
                     author="system"
                 )
 
+                # Register non-streaming version (for backward compatibility)
                 self.register_tool(
                     name="call_document_rag_code_civile_algerian",
                     tool=call_document_rag_code_civile_algerian,
@@ -559,6 +562,26 @@ class ToolManager:
                     category="document_rag",
                     author="system"
                 )
+                
+                self.register_tool(
+                    name="code_civile_via_rag",
+                    tool=llamaindex_document_rag,
+                    description="Search and retrieve information from the Algerian Civil Code using RAG (Retrieval-Augmented Generation). Provides expert legal analysis and context from Algerian civil law documents.",
+                    category="document_rag",
+                    author="system"
+                )
+                
+                # Register ASYNC version - collects streaming chunks and returns complete result
+                # Note: ADK AsyncGenerator only works for live video/audio, not regular tools
+                self.register_tool(
+                    name="call_document_rag_code_civile_algerian_streaming",
+                    tool=call_document_rag_code_civile_algerian_streaming,
+                    description="[ASYNC] Search and retrieve information from the Algerian Civil Code using RAG. This async version collects streaming chunks from the API for faster response. Returns complete results with references.",
+                    category="document_rag",
+                    author="system",
+                    metadata={"async": True, "base_tool": "call_document_rag_code_civile_algerian"}
+                )
+                logger.info("Registered async RAG tool: call_document_rag_code_civile_algerian_streaming")
                 
                 # Register Gemini image generation tools
                 self.register_tool(

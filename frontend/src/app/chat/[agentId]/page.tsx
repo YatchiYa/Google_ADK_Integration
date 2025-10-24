@@ -321,6 +321,23 @@ export default function ChatPage() {
     }
   };
 
+  const handleDeleteConversation = async (conversationId: string) => {
+    try {
+      await ChatService.deleteConversation(conversationId);
+      
+      // If deleting current conversation, start new chat
+      if (session?.id === conversationId) {
+        handleNewChat();
+      }
+      
+      // Reload conversations list
+      await loadConversations();
+    } catch (error) {
+      console.error("Failed to delete conversation:", error);
+      setError("Failed to delete conversation");
+    }
+  };
+
   const handleExampleClick = (example: string) => {
     sendMessage(example);
   };
@@ -366,13 +383,30 @@ export default function ChatPage() {
   };
 
   const toggleReactMode = async () => {
-    // When enabling ReAct mode, use PlanReActPlanner
-    // When disabling, remove both agent_type and planner
-    const newMode = isReactMode ? undefined : "react";
-    await updateAgentConfig({
-      agent_type: newMode,
-      planner: newMode === "react" ? "PlanReActPlanner" : undefined,
-    });
+    if (!agent) return;
+    
+    try {
+      // Optimistically update UI
+      const newReactMode = !isReactMode;
+      setIsReactMode(newReactMode);
+      setPlannerEnabled(newReactMode);
+      
+      // When enabling ReAct mode, use PlanReActPlanner
+      // When disabling, remove both agent_type and planner
+      const newMode = newReactMode ? "react" : undefined;
+      await updateAgentConfig({
+        agent_type: newMode,
+        planner: newMode === "react" ? "PlanReActPlanner" : undefined,
+      });
+      
+      console.log(`✅ ReAct mode ${newReactMode ? 'enabled' : 'disabled'} successfully`);
+    } catch (error) {
+      // Revert on error
+      console.error("Failed to toggle ReAct mode:", error);
+      setIsReactMode(!isReactMode);
+      setPlannerEnabled(!plannerEnabled);
+      setError("Failed to toggle ReAct mode");
+    }
   };
 
   const togglePlanner = async () => {
@@ -434,6 +468,7 @@ export default function ChatPage() {
         onAgentSelect={handleAgentSelect}
         onNewChat={handleNewChat}
         onConversationSelect={handleConversationSelect}
+        onDeleteConversation={handleDeleteConversation}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />

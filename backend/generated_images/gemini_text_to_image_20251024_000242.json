@@ -1,0 +1,16 @@
+{
+  "filename": "gemini_text_to_image_20251024_000242.png",
+  "timestamp": "2025-10-24T00:02:42.353724",
+  "model_id": "gemini-2.5-flash-image-preview",
+  "prompt": "panda at a garden party",
+  "generation_type": "text_to_image",
+  "temperature": 1,
+  "input_image_path": null,
+  "additional_image_paths": null,
+  "local_path": "generated_images/gemini_text_to_image_20251024_000242.png",
+  "additional_generated_paths": [],
+  "text_responses": [
+    "What a charming idea! Here's a panda enjoying a garden party: "
+  ],
+  "total_images_generated": 1
+}

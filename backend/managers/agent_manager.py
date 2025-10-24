@@ -924,50 +924,98 @@ You have advanced thinking capabilities. Use your internal reasoning to plan and
 
     def _recreate_agent(self, agent_id: str):
         """Recreate agent instance with updated configuration"""
-        agent_info = self._agents[agent_id]
-        
-        # Build instruction
-        instruction = self._build_instruction(agent_info.persona)
-        
-        # Get tools (including agent tools and shared memory tools)
-        agent_tools = []
-        if agent_info.tools:
-            agent_tools = self.tool_manager.get_tools_for_agent(
-                tool_names=agent_info.tools,
-                agent_manager=self,
-                memory_manager=self.memory_manager,
-                user_id="system",  # Default user for agent creation
-                agent_id=agent_id
+        try:
+            agent_info = self._agents[agent_id]
+            
+            # Build instruction
+            instruction = self._build_instruction(agent_info.persona)
+            
+            # Get tools (including agent tools and shared memory tools)
+            agent_tools = []
+            if agent_info.tools:
+                agent_tools = self.tool_manager.get_tools_for_agent(
+                    tool_names=agent_info.tools,
+                    agent_manager=self,
+                    memory_manager=self.memory_manager,
+                    user_id="system",  # Default user for agent creation
+                    agent_id=agent_id
+                )
+            
+            # Create generate content config
+            generate_config = types.GenerateContentConfig(
+                temperature=agent_info.config.temperature,
+                max_output_tokens=agent_info.config.max_output_tokens,
+                top_p=agent_info.config.top_p,
+                top_k=agent_info.config.top_k,
+                safety_settings=agent_info.config.safety_settings or []
             )
-        
-        # Create generate content config
-        generate_config = types.GenerateContentConfig(
-            temperature=agent_info.config.temperature,
-            max_output_tokens=agent_info.config.max_output_tokens,
-            top_p=agent_info.config.top_p,
-            top_k=agent_info.config.top_k,
-            safety_settings=agent_info.config.safety_settings or []
-        )
-        
-        # Create model
-        if agent_info.config.model.startswith(("openai/", "anthropic/", "ollama/")):
-            model = LiteLlm(model=agent_info.config.model)
-        else:
-            model = agent_info.config.model
-        
-        # Create new agent instance
-        adk_agent = LlmAgent(
-            model=model,
-            name=agent_id,
-            description=agent_info.persona.description,
-            instruction=instruction,
-            tools=agent_tools,
-            generate_content_config=generate_config,
-            output_key=f"{agent_id}_response"
-        )
-        
-        # Replace instance
-        self._agent_instances[agent_id] = adk_agent
+            
+            # Create model
+            if agent_info.config.model.startswith(("openai/", "anthropic/", "ollama/")):
+                model = LiteLlm(model=agent_info.config.model)
+            else:
+                model = agent_info.config.model
+            
+            # Get planner configuration from metadata
+            planner = agent_info.metadata.get('planner')
+            planner_instance = None
+            
+            # Create planner if specified
+            if planner == "PlanReActPlanner":
+                from google.adk.planners import PlanReActPlanner
+                planner_instance = PlanReActPlanner()
+                logger.info(f"Adding PlanReActPlanner to agent {agent_id} during recreation")
+                
+                # Enhance instruction for ReAct methodology
+                instruction = f"""{instruction}
+
+IMPORTANT: You MUST follow the ReAct methodology structure in your responses:
+1. **PLANNING**: Analyze the task and create a step-by-step plan
+2. **ACTION**: Execute each step using available tools
+3. **REASONING**: Reflect on the results and adjust the plan if needed
+4. **FINAL ANSWER**: Provide a comprehensive response based on your findings
+
+Use this structured approach for complex queries that require multiple steps or tool usage."""
+                
+            elif planner == "BuiltInPlanner":
+                from google.adk.planners import BuiltInPlanner
+                thinking_budget = 1024 if len(agent_tools) > 3 else 512
+                planner_instance = BuiltInPlanner(thinking_budget=thinking_budget)
+                logger.info(f"Adding BuiltInPlanner to agent {agent_id} during recreation (thinking_budget: {thinking_budget})")
+            
+            # Create new agent instance with planner
+            if planner_instance:
+                adk_agent = LlmAgent(
+                    model=model,
+                    name=agent_id,
+                    description=agent_info.persona.description,
+                    instruction=instruction,
+                    tools=agent_tools,
+                    generate_content_config=generate_config,
+                    planner=planner_instance,
+                    output_key=f"{agent_id}_response"
+                )
+            else:
+                adk_agent = LlmAgent(
+                    model=model,
+                    name=agent_id,
+                    description=agent_info.persona.description,
+                    instruction=instruction,
+                    tools=agent_tools,
+                    generate_content_config=generate_config,
+                    output_key=f"{agent_id}_response"
+                )
+            
+            # Replace instance
+            self._agent_instances[agent_id] = adk_agent
+            logger.info(f"Successfully recreated agent {agent_id} with planner: {planner}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error recreating agent {agent_id}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
 
     def create_team_agent(self, team_id: str, team_name: str, team_description: str, 
                          team_type: str, agent_ids: List[str]) -> str:

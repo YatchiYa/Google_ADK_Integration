@@ -1,0 +1,16 @@
+{
+  "filename": "gemini_text_to_image_20251024_000540.png",
+  "timestamp": "2025-10-24T00:05:40.959161",
+  "model_id": "gemini-2.5-flash-image-preview",
+  "prompt": "abstract design inspired by nature",
+  "generation_type": "text_to_image",
+  "temperature": 0.8,
+  "input_image_path": null,
+  "additional_image_paths": null,
+  "local_path": "generated_images/gemini_text_to_image_20251024_000540.png",
+  "additional_generated_paths": [],
+  "text_responses": [
+    "Sure, here's an abstract design inspired by nature for you!\n\n"
+  ],
+  "total_images_generated": 1
+}

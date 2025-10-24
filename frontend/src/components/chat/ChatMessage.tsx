@@ -28,15 +28,15 @@ export default function ChatMessage({ message }: ChatMessageProps) {
     return <ToolCallMessage message={message} />;
   }
 
-  // Check if message is long and needs expansion
-  const isLongMessage = message.content.split("\n").length > 3;
+  // Check if message is long and needs expansion - ONLY FOR USER MESSAGES
+  const isLongMessage = isUser && message.content.split("\n").length > 3;
   const displayContent = expanded || !isLongMessage
     ? message.content
     : message.content.split("\n").slice(0, 3).join("\n") + "...";
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}>
-      <div className={`flex items-start space-x-3 max-w-3xl ${isUser ? "flex-row-reverse space-x-reverse" : ""}`}>
+      <div className={`flex items-start space-x-3 max-w-3xl w-full ${isUser ? "flex-row-reverse space-x-reverse" : ""}`}>
         {/* Avatar */}
         <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
           isUser 
@@ -51,23 +51,21 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         </div>
 
         {/* Message Content */}
-        <div className={`flex-1 ${isUser ? "items-end" : "items-start"} flex flex-col`}>
+        <div className={`flex-1 ${isUser ? "items-end" : "items-start"} flex flex-col min-w-0`}>
           <div className={`px-4 py-3 rounded-2xl ${
             isUser
               ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
               : "bg-white border border-gray-200 text-gray-900"
-          } shadow-sm`}>
+          } shadow-sm max-w-full`}>
             <p className="text-sm whitespace-pre-wrap break-words">
               {displayContent}
             </p>
             
-            {/* Expand/Collapse button for long messages */}
+            {/* Expand/Collapse button ONLY for long USER messages */}
             {isLongMessage && (
               <button
                 onClick={() => setExpanded(!expanded)}
-                className={`mt-2 text-xs flex items-center space-x-1 ${
-                  isUser ? "text-white/80 hover:text-white" : "text-blue-600 hover:text-blue-800"
-                }`}
+                className="mt-2 text-xs flex items-center space-x-1 text-white/80 hover:text-white"
               >
                 <span>{expanded ? "Show less" : "Show more"}</span>
                 {expanded ? <FaChevronUp /> : <FaChevronDown />}

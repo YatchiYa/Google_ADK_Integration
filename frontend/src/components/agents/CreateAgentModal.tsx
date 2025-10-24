@@ -14,15 +14,18 @@ import { FaTimes, FaRobot, FaSpinner, FaCheckCircle } from "react-icons/fa";
 interface CreateAgentModalProps {
   onClose: () => void;
   onAgentCreated: (agent: Agent) => void;
+  editingAgent?: Agent | null;
 }
 
 export default function CreateAgentModal({
   onClose,
   onAgentCreated,
+  editingAgent,
 }: CreateAgentModalProps) {
   const [loading, setLoading] = useState(false);
   const [availableTools, setAvailableTools] = useState<string[]>([]);
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
+  const isEditing = !!editingAgent;
 
   const [formData, setFormData] = useState<CreateAgentRequest>({
     name: "",
@@ -53,7 +56,37 @@ export default function CreateAgentModal({
 
   useEffect(() => {
     loadAvailableResources();
-  }, []);
+    
+    // Pre-fill form if editing
+    if (editingAgent) {
+      setFormData({
+        name: editingAgent.name || "",
+        persona: editingAgent.persona || {
+          name: "",
+          description: "",
+          personality: "",
+          expertise: [],
+          communication_style: "professional",
+          language: "en",
+          custom_instructions: "",
+          examples: [],
+        },
+        config: editingAgent.config || {
+          model: "gemini-2.0-flash",
+          temperature: 0.7,
+          max_output_tokens: 2048,
+          top_p: 0.9,
+          top_k: 40,
+          timeout_seconds: 30,
+          retry_attempts: 3,
+        },
+        tools: editingAgent.tools || [],
+        agent_type: editingAgent.agent_type || "",
+        planner: editingAgent.planner || "",
+        sub_agents: editingAgent.sub_agents || [],
+      });
+    }
+  }, [editingAgent]);
 
   const loadAvailableResources = async () => {
     try {
@@ -87,8 +120,13 @@ export default function CreateAgentModal({
         },
       };
 
-      const newAgent = await AgentService.createAgent(cleanedData);
-      onAgentCreated(newAgent);
+      let agent: Agent;
+      if (isEditing && editingAgent) {
+        agent = await AgentService.updateAgent(editingAgent.id, cleanedData);
+      } else {
+        agent = await AgentService.createAgent(cleanedData);
+      }
+      onAgentCreated(agent);
     } catch (error) {
       console.error("Failed to create agent:", error);
       alert("Failed to create agent. Please try again.");
@@ -132,10 +170,10 @@ export default function CreateAgentModal({
             </div>
             <div>
               <h2 className="text-2xl font-bold text-gray-900">
-                Create New Agent
+                {isEditing ? "Edit Agent" : "Create New Agent"}
               </h2>
               <p className="text-sm text-gray-600 mt-0.5">
-                Build your intelligent AI assistant
+                {isEditing ? "Update your AI assistant configuration" : "Build your intelligent AI assistant"}
               </p>
             </div>
           </div>

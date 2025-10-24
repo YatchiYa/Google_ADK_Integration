@@ -9,10 +9,16 @@ import operator
 import requests
 import yfinance as yf
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Generator, AsyncGenerator
 import pytz
 from loguru import logger 
 import json
+from google.adk.tools import BaseTool
+
+
+# Streaming tools must be async functions returning AsyncGenerator
+# Following ADK official documentation for streaming tools
+
 
 def google_search(query: str, num_results: int = 5) -> str:
     """
@@ -594,3 +600,143 @@ def call_document_rag_code_civile_algerian(query: str, mode: str = "global", use
     except requests.exceptions.RequestException as e:
         logger.error(f"Error while connecting to endpoint: {e}")
         return f"Error while connecting to endpoint: {e}"
+
+
+async def call_document_rag_code_civile_algerian_streaming(
+    query: str, 
+    mode: str = "global", 
+    user_prompt: str = "expert in laws retrieving"
+) -> str:
+    """
+    ASYNC VERSION: Search and retrieve information from the Algerian Civil Code using RAG.
+    This is an async tool that collects streaming chunks and returns the complete result.
+    Note: ADK doesn't support AsyncGenerator for regular tools, only for live video/audio streaming.
+    
+    Args:
+        query (str): The legal question or topic to search for
+        mode (str): Search mode - "global" for comprehensive search
+        user_prompt (str): Context for the search expert role
+        
+    Returns:
+        str: Complete legal information from Algerian Civil Code
+    """
+    import asyncio
+    import aiohttp
+    
+    url = "https://legal-index.com/light_rag/query/stream"
+
+    payload = {
+        "mode": mode,
+        "response_type": "Multiple Paragraphs",
+        "top_k": 40,
+        "chunk_top_k": 20,
+        "max_entity_tokens": 6000,
+        "max_relation_tokens": 8000,
+        "max_total_tokens": 30000,
+        "only_need_context": False,
+        "only_need_prompt": False,
+        "stream": True,
+        "history_turns": 0,
+        "user_prompt": user_prompt,
+        "enable_rerank": True,
+        "query": query,
+        "conversation_history": []
+    }
+
+    headers = {"Content-Type": "application/json"}
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=120)) as response:
+                logger.info(f"[ASYNC STREAMING] Response status code: {response.status}")
+                response.raise_for_status()
+                
+                references = []
+                response_text = ""
+                
+                # Collect all chunks from stream
+                async for line in response.content:
+                    if line:
+                        # Decode bytes to string
+                        line_str = line.decode('utf-8').strip()
+                        
+                        if not line_str:
+                            continue
+                        
+                        try:
+                            # Parse each JSON line
+                            json_line = json.loads(line_str)
+                            
+                            # Handle references (usually comes first)
+                            if 'references' in json_line:
+                                references = json_line['references']
+                                logger.info(f"[ASYNC STREAMING] Received {len(references)} references")
+                            
+                            # Handle response chunks - accumulate them
+                            if 'response' in json_line:
+                                chunk = json_line['response']
+                                response_text += chunk
+                                logger.debug(f"[ASYNC STREAMING] Accumulated chunk: {len(response_text)} chars total")
+                        
+                        except json.JSONDecodeError:
+                            logger.warning(f"[ASYNC STREAMING] Could not parse line as JSON: {line_str[:100]}")
+                            continue
+                
+                # Format final response with references
+                final_response = response_text
+                if references:
+                    final_response += "\n\n📚 References:\n"
+                    for i, ref in enumerate(references, 1):
+                        final_response += f"{i}. {ref}\n"
+                
+                logger.info(f"[ASYNC STREAMING] Completed. Total response length: {len(final_response)} characters")
+                return final_response
+                
+    except Exception as e:
+        logger.error(f"[ASYNC STREAMING] Error while connecting to endpoint: {e}")
+        return f"❌ Error while connecting to legal database: {str(e)}"
+
+
+def llamaindex_document_rag(query: str, collection_name: str = "code_civil"):
+    """
+    Query the Legal-Index semantic RAG API to retrieve relevant legal articles.
+
+    Args:
+        query (str): The user's legal question or topic.
+        collection_name (str): The legal document collection to search in (default: "code_civil").
+
+    Returns:
+        str: The extracted legal response text or an error message.
+    """
+    url = "https://legal-index.com/api/agent/tools/semantic_rag_search"
+
+    payload = {
+        "tool_type": "simple",
+        "question": query,
+        "collection_name": collection_name
+    }
+
+    headers = {"Content-Type": "application/json"}
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        logger.info(f"Response status code: {response.status_code}")
+        response.raise_for_status()
+
+        data = response.json()
+        logger.info(f"Response JSON keys: {list(data.keys())}")
+
+        if data.get("status") == "success":
+            result_text = data.get("data", "").strip()
+            logger.info(f"Retrieved response length: {len(result_text)} characters")
+            return result_text or "No data returned from API."
+        else:
+            logger.warning(f"API returned non-success status: {data}")
+            return f"API returned non-success status: {data}"
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error while connecting to endpoint: {e}")
+        return f"Error while connecting to endpoint: {e}"
+    except json.JSONDecodeError:
+        logger.error("Invalid JSON received from API.")
+        return "Invalid JSON received from API."

@@ -41,17 +41,6 @@ export default function ChatInput({
   return (
     <div className="border-t border-gray-200 bg-white p-4">
       <div className="max-w-4xl mx-auto">
-        {/* Model Selector */}
-        <div className="flex items-center space-x-2 mb-3">
-          <div className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 rounded-lg text-sm">
-            <FaRobot className="text-blue-500" />
-            <span className="text-gray-700 font-medium">{modelName}</span>
-            <select className="bg-transparent border-none outline-none text-gray-600 cursor-pointer">
-              <option>google</option>
-            </select>
-          </div>
-        </div>
-
         {/* Input Area */}
         <div className="relative bg-white border border-gray-300 rounded-2xl shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
           <textarea

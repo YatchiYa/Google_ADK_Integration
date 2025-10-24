@@ -1,0 +1,16 @@
+{
+  "filename": "gemini_text_to_image_20251023_205913.png",
+  "timestamp": "2025-10-23T20:59:13.273101",
+  "model_id": "gemini-2.5-flash-image-preview",
+  "prompt": "garden party image",
+  "generation_type": "text_to_image",
+  "temperature": 1,
+  "input_image_path": null,
+  "additional_image_paths": null,
+  "local_path": "generated_images/gemini_text_to_image_20251023_205913.png",
+  "additional_generated_paths": [],
+  "text_responses": [
+    "Here's your garden party image! "
+  ],
+  "total_images_generated": 1
+}

@@ -4,7 +4,7 @@ import time
 from typing import Dict, List, Optional, Union
 
 # Configuration
-ACCESS_TOKEN = "EAAGZAhN3OgkMBP4ENfoZAoLSMlInIsCDe2KewbFGLS8uuWnNg32PwtWV6PFWcPVNWwoB3EflpHlkANvHMRanlNZCE8P2Cu6EmnSpUe5lbA5B4exs39fH6QaelxRQ6MnhhO0XzZCaUU2ens9MRmTJQQ8ZAKRldG6CORo2ZAkFzydeZCLFzXVei8wf6QPddK6M8b7AtEkcyVSvduc15ieHSO1DGQsRUvqNaZC5DFKaII1kKpaRsEZCKAz1fVthSWAeZCZCBuRP140gZC4ZD"
+ACCESS_TOKEN = "EAAGZAhN3OgkMBPzCrQ3EkneaZBlWdG0Q9oCeUbOkHK2WtpHLllkFCMJ1CEoytII2wgJSScJNsNLlZBp4TN6Al841VGzkeTA7DBeWTXnsyeBVZCFW30swM16XZAhvs57WfoT6mwjwfUOddMGBX5KP6eXZBgkv9MgmFxBzSuJQSGHywIL81dThyjOgAx3iJn3QjGJucxZBj6e9lNZBflul81L01NRZBSI6lMu4ZCh6i5xagPsdVffSILfpbKQleo8NYjRJ1BtgafM9yEruKO7kqj"
 GRAPH_API_VERSION = "v24.0"
 BASE_URL = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
 
@@ -1501,7 +1501,7 @@ def demo_posting_functions():
     #     print("❌ No Facebook pages available for demo")
     #     return
     
-    page = {'id': '861883367002548', 'name': 'Observator AI News', 'category': 'Société de médias/d’actualités', 'access_token': 'EAAGZAhN3OgkMBP3LEKgPP1D42PdhV9iTy358XSjS97oLDFXpYWOka1ZCL2AEXNVJGbPpmGNI7a9OXc1ETWSSyjQSyXpDes4dNsoZC38uB1n0zF6DdIbB7uZBSSJl6FpPYQxxZBeSG0Sdu60zdodk2aUIKPJvv8CI1Y1jgiumZCEeGylC1vo64ZBIk1af1CzJZBYMY4TOZCnyKaLBfb3cosCdOd1PU5vfNE2KfX1ToH8Cymq0ZD', 'tasks': ['MODERATE', 'MESSAGING', 'ANALYZE', 'ADVERTISE', 'CREATE_CONTENT', 'MANAGE']}
+    page = {'id': '861883367002548', 'name': 'Observator AI News', 'category': 'Société de médias/d’actualités', 'access_token': 'EAAGZAhN3OgkMBPyxGANWGrry83Y9fTZCnPE3YW9MvcbYkW8KBsHSH90k52vRXF5NXrAT3Qbw4nsai8QlJO9ditRiXmMeJ3ZCA7XTP2vHmvQdWL2WkLvGFZAbPOqFFGYEuZAV930l0NLtqZAxbUHZCDZCesFCy3ZCkvAVUyMhz1pZBYX2oBytHrCNDtJVYnFB0ZBQlZAo8UcGYWdNgd8te0XZCc1nCT7VpgpxuL9JQ4NBFkY6VbQ0ZD', 'tasks': ['MODERATE', 'MESSAGING', 'ANALYZE', 'ADVERTISE', 'CREATE_CONTENT', 'MANAGE']}
     page_name = page['name']
     
     print(f"🎯 Demo target: {page_name}")
@@ -1537,13 +1537,13 @@ def demo_posting_functions():
     # )
 
     # demo 4 local image :
-    # print(f"\n4️⃣ Using direct function call...")
-    # result = upload_local_image_to_facebook_page(
-    #     page['id'], 
-    #     page['access_token'], 
-    #     image_file_path="/home/yarab/Téléchargements/2919bdf3-2871-47df-998c-22fca9476a21.png",
-    #     caption="Hello from direct function call! 📱"
-    # )
+    print(f"\n4️⃣ Using direct function call...")
+    result = upload_local_image_to_facebook_page(
+        page['id'], 
+        page['access_token'], 
+        image_file_path="/home/yarab/Téléchargements/9aa279d9-7df4-4121-9d01-c0917541d933.png",
+        caption="Hello from direct function call! 📱"
+    )
     
     # demo 5 : insta post
     print(f"\n5️⃣ Using direct function call...")
@@ -1554,37 +1554,37 @@ def demo_posting_functions():
     # )
 
     # Get the correct page and Instagram info from your data
-    observator_ai_news = {
-        'id': '861883367002548',
-        'name': 'Observator AI News',
-        'access_token': 'EAAGZAhN3OgkMBP006FVG6YHm9ZBg9kmYNEjLZCf2JX29hbGtAyGXLNFzcxTvuaaAiekI5ZCynLE4L57C3SqGZBBTx9ZAlQTQmeSIVwKou0D2v4Jh1dROrvykDCEdP4q8LZBpWSMs1ZAc19znnYGx67xV9SqC5ubJERUZCfW8TkwAjISfawGbkSYZCsB7LV3ygA0cUVF5tmUZBIoiM5rCbrNp0mdvRNSi715ZBhPZAe9S4VLokkxkZD',
-        'instagram_business_account': {'id': '17841460715803093'}
-    }
+    # observator_ai_news = {
+    #     'id': '861883367002548',
+    #     'name': 'Observator AI News',
+    #     'access_token': 'EAAGZAhN3OgkMBP006FVG6YHm9ZBg9kmYNEjLZCf2JX29hbGtAyGXLNFzcxTvuaaAiekI5ZCynLE4L57C3SqGZBBTx9ZAlQTQmeSIVwKou0D2v4Jh1dROrvykDCEdP4q8LZBpWSMs1ZAc19znnYGx67xV9SqC5ubJERUZCfW8TkwAjISfawGbkSYZCsB7LV3ygA0cUVF5tmUZBIoiM5rCbrNp0mdvRNSi715ZBhPZAe9S4VLokkxkZD',
+    #     'instagram_business_account': {'id': '17841460715803093'}
+    # }
     
-    instagram_id = observator_ai_news['instagram_business_account']['id']
-    page_token = observator_ai_news['access_token']
+    # instagram_id = observator_ai_news['instagram_business_account']['id']
+    # page_token = observator_ai_news['access_token']
     
-    print(f"📋 Using Observator AI News Instagram account:")
-    print(f"   Page ID: {observator_ai_news['id']}")
-    print(f"   Instagram ID: {instagram_id}")
+    # print(f"📋 Using Observator AI News Instagram account:")
+    # print(f"   Page ID: {observator_ai_news['id']}")
+    # print(f"   Instagram ID: {instagram_id}")
     
-    # First, let's get Instagram account details to verify it's accessible
-    print(f"\n🔍 Getting Instagram account details...")
-    ig_details = get_instagram_account_details(instagram_id, page_token)
-    print(f"   Instagram details: {ig_details}")
+    # # First, let's get Instagram account details to verify it's accessible
+    # print(f"\n🔍 Getting Instagram account details...")
+    # ig_details = get_instagram_account_details(instagram_id, page_token)
+    # print(f"   Instagram details: {ig_details}")
     
-    # Now try to post
-    result = post_image_to_instagram_account(
-        instagram_id,
-        page_token,
-        "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT-sUSNr6dxXNsr0ri9DuQo6GfiNnYlf5irow&s",
-        "Test post from API! 🚀 #test"
-    )
+    # # Now try to post
+    # result = post_image_to_instagram_account(
+    #     instagram_id,
+    #     page_token,
+    #     "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT-sUSNr6dxXNsr0ri9DuQo6GfiNnYlf5irow&s",
+    #     "Test post from API! 🚀 #test"
+    # )
 
-    if 'id' in result:
-        print(f"   ✅ Posted successfully: {result['id']}")
-    else:
-        print(f"   ❌ Failed: {result.get('error', {}).get('message', 'Unknown error')}")
+    # if 'id' in result:
+    #     print(f"   ✅ Posted successfully: {result['id']}")
+    # else:
+    #     print(f"   ❌ Failed: {result.get('error', {}).get('message', 'Unknown error')}")
 
 def demo_all_features():
     """Comprehensive demo of all features"""

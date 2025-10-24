@@ -2,7 +2,8 @@
 
 import { Agent } from "@/types/agent.types";
 import { ChatSession } from "@/types/chat.types";
-import { FaPlus, FaComment, FaRobot, FaTimes } from "react-icons/fa";
+import { FaPlus, FaComment, FaRobot, FaTimes, FaTrash } from "react-icons/fa";
+import { useState } from "react";
 
 interface ChatSidebarProps {
   agents: Agent[];
@@ -11,6 +12,7 @@ interface ChatSidebarProps {
   onAgentSelect: (agentId: string) => void;
   onNewChat: () => void;
   onConversationSelect: (conversationId: string) => void;
+  onDeleteConversation?: (conversationId: string) => void;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -22,9 +24,26 @@ export default function ChatSidebar({
   onAgentSelect,
   onNewChat,
   onConversationSelect,
+  onDeleteConversation,
   isOpen,
   onClose
 }: ChatSidebarProps) {
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (e: React.MouseEvent, conversationId: string) => {
+    e.stopPropagation();
+    if (!onDeleteConversation) return;
+    
+    if (confirm("Are you sure you want to delete this conversation?")) {
+      setDeletingId(conversationId);
+      try {
+        await onDeleteConversation(conversationId);
+      } finally {
+        setDeletingId(null);
+      }
+    }
+  };
+
   return (
     <>
       {/* Mobile Overlay */}
@@ -102,23 +121,45 @@ export default function ChatSidebar({
                   // Get first user message as title
                   const firstMessage = conv.messages?.find((m: any) => m.role === "user");
                   const title = firstMessage?.content?.substring(0, 40) || conv.id.slice(-8);
+                  const isDeleting = deletingId === conv.id;
 
                   return (
-                    <button
+                    <div
                       key={conv.id}
-                      onClick={() => onConversationSelect(conv.id)}
-                      className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors text-left"
+                      className="group relative w-full flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
                     >
-                      <FaComment className="text-sm flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {title}{title.length >= 40 ? "..." : ""}
-                        </p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {new Date(conv.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </button>
+                      <button
+                        onClick={() => onConversationSelect(conv.id)}
+                        disabled={isDeleting}
+                        className="flex-1 flex items-center space-x-3 text-left min-w-0"
+                      >
+                        <FaComment className="text-sm flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {title}{title.length >= 40 ? "..." : ""}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {new Date(conv.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </button>
+                      
+                      {/* Delete Button */}
+                      {onDeleteConversation && (
+                        <button
+                          onClick={(e) => handleDelete(e, conv.id)}
+                          disabled={isDeleting}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-all flex-shrink-0"
+                          title="Delete conversation"
+                        >
+                          {isDeleting ? (
+                            <div className="w-3 h-3 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <FaTrash className="text-xs" />
+                          )}
+                        </button>
+                      )}
+                    </div>
                   );
                 })
               )}

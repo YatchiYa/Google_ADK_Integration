@@ -25,6 +25,7 @@ class StreamingEventType(Enum):
     TOOL_CALL = "tool_call"
     TOOL_RESPONSE = "tool_response"
     TOOL_RESULT = "tool_result"
+    TOOL_STREAM_CHUNK = "tool_stream_chunk"  # NEW: For streaming tool results
     THINKING = "thinking"
     ERROR = "error"
     COMPLETE = "complete"
@@ -365,6 +366,11 @@ class StreamingHandler:
                                 }
                             )
                             yield tool_response_event
+                            
+                            # CRITICAL FIX: Reset accumulated content after tool response
+                            # TODO : This prevents duplicate detection from comparing pre-tool and post-tool content
+                            # logger.debug(f"DEBUG: Resetting accumulated content after tool response (was {len(self._accumulated_content[session_id])} chars)")
+                            # self._accumulated_content[session_id] = ""
                         
                         # Handle text content
                         elif part.text and part.text.strip():
