@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 from loguru import logger
 
 from auth.dependencies import get_current_user
-from tools.meta_publisher_tool import update_meta_tokens, get_active_tokens
+from tools.meta.meta_publisher_tool import update_meta_tokens, get_active_tokens
 
 router = APIRouter(prefix="/api/v1/meta", tags=["Meta Authentication"])
 

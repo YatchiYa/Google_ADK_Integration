@@ -72,7 +72,7 @@ def _load_image(image_path: str) -> Image.Image:
 
 def _save_image(image: Image.Image, filename: str) -> Path:
     """Save PIL image to file."""
-    file_path = OUTPUT_DIR / filename
+    file_path = "/tmp/generated_images/" + filename
     image.save(file_path)
     logger.info(f"Image saved successfully at: {file_path}")
     return file_path
@@ -244,22 +244,23 @@ def gemini_image_generator(
         }
         _save_metadata(metadata, file_path)
         
-        result_info = {
-            "success": True,
-            "main_image_path": str(file_path),
-            "main_image_filename": file_path.name,
-            "main_image_url": f"/api/v1/images/serve/{file_path.name}",
-            "additional_images": additional_paths,
-            "text_responses": text_responses,
-            "total_images": len(generated_images),
-            "generation_type": generation_type,
-            "model_used": model_id,
-            "prompt": prompt,
-            "metadata_path": str(file_path.with_suffix('.json'))
-        }
+        # result_info = {
+        #     "success": True,
+        #     "main_image_path": str(file_path),
+        #     "main_image_filename": file_path.name,
+        #     "main_image_url": f"/api/v1/images/serve/{file_path.name}",
+        #     "additional_images": additional_paths,
+        #     "text_responses": text_responses,
+        #     "total_images": len(generated_images),
+        #     "generation_type": generation_type,
+        #     "model_used": model_id,
+        #     "prompt": prompt,
+        #     "metadata_path": str(file_path.with_suffix('.json'))
+        # }
+        return str(file_path)
         
-        logger.info(f"Successfully generated {len(generated_images)} images. Main image: {file_path}")
-        return json.dumps(result_info, indent=2)
+        # logger.info(f"Successfully generated {len(generated_images)} images. Main image: {file_path}")
+        # return json.dumps(result_info, indent=2)
         
     except Exception as e:
         logger.error(f"Error generating image with Gemini: {e}")

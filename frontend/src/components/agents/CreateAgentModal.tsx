@@ -46,7 +46,7 @@ export default function CreateAgentModal({
       retry_attempts: 3,
     },
     tools: [],
-    agent_type: "",
+    agent_type: "regular",
     planner: "",
     sub_agents: [],
   });
@@ -200,9 +200,13 @@ export default function CreateAgentModal({
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
               >
                 <option value="">Standard Agent</option>
-                <option value="react">ReAct Planner Agent</option>
-                <option value="sequential">Sequential Agent</option>
-                <option value="parallel">Parallel Agent</option>
+                <option value="PlanReActPlanner">ReAct Planner Agent</option>
+                <option value="BuiltInPlanner">Built-in Planner Agent</option>
+                <option value="BuiltInPlannerAdvanced">
+                  Advanced Built-in Planner Agent
+                </option>
+                <option value="SequentialAgent">Sequential Agent</option>
+                <option value="ParallelAgent">Parallel Agent</option>
               </select>
             </div>
             <div>
