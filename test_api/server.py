@@ -135,6 +135,23 @@ async def create_or_update_session(
             "lastUpdateTime": datetime.now().timestamp()
         }
     
+    # Also create ADK session
+    try:
+        adk_session = await adk_session_service.get_session(
+            app_name=app_name,
+            user_id=user_id,
+            session_id=session_id
+        )
+        print(f"✓ ADK session already exists: {session_id}")
+    except:
+        adk_session = await adk_session_service.create_session(
+            app_name=app_name,
+            user_id=user_id,
+            session_id=session_id,
+            state=session_state.state
+        )
+        print(f"✓ Created ADK session: {session_id}")
+    
     return SessionResponse(**sessions[key])
 
 
@@ -210,21 +227,25 @@ async def run_agent(request: RunRequest) -> List[Dict[str, Any]]:
         # Run the agent using ADK Runner
         print(f"\n🚀 Running agent with message: {user_message}\n")
         
-        # Create ADK session if not exists
-        adk_session_key = f"{request.app_name}:{request.user_id}:{request.session_id}"
+        # Ensure ADK session exists
         try:
             adk_session = await adk_session_service.get_session(
                 app_name=request.app_name,
                 user_id=request.user_id,
                 session_id=request.session_id
             )
-        except:
+            print(f"✓ Found existing ADK session: {request.session_id}")
+            print(f"   Session details: app={adk_session.app_name}, user={adk_session.user_id}, id={adk_session.id}")
+        except Exception as e:
+            print(f"❌ Error getting session: {e}")
+            print(f"Creating new ADK session: {request.session_id}")
             adk_session = await adk_session_service.create_session(
                 app_name=request.app_name,
                 user_id=request.user_id,
                 session_id=request.session_id,
                 state=session["state"]
             )
+            print(f"✓ ADK session created: {adk_session.id}")
         
         # Initialize runner with proper parameters
         runner = Runner(
@@ -238,6 +259,9 @@ async def run_agent(request: RunRequest) -> List[Dict[str, Any]]:
             role='user',
             parts=[types.Part(text=user_message)]
         )
+        
+        print(f"🔍 About to call runner.run_async with:")
+        print(f"   user_id={request.user_id}, session_id={request.session_id}")
         
         # Collect all events from the agent execution
         agent_events = []
@@ -358,20 +382,25 @@ async def run_agent_sse(request: RunRequest):
             # Run the agent using ADK Runner
             print(f"\n🚀 Running agent (streaming) with message: {user_message}\n")
             
-            # Create ADK session if not exists
+            # Ensure ADK session exists
             try:
                 adk_session = await adk_session_service.get_session(
                     app_name=request.app_name,
                     user_id=request.user_id,
                     session_id=request.session_id
                 )
-            except:
+                print(f"✓ Found existing ADK session: {request.session_id}")
+                print(f"   Session details: app={adk_session.app_name}, user={adk_session.user_id}, id={adk_session.id}")
+            except Exception as e:
+                print(f"❌ Error getting session: {e}")
+                print(f"Creating new ADK session: {request.session_id}")
                 adk_session = await adk_session_service.create_session(
                     app_name=request.app_name,
                     user_id=request.user_id,
                     session_id=request.session_id,
                     state=session["state"]
                 )
+                print(f"✓ ADK session created: {adk_session.id}")
             
             # Initialize runner with proper parameters
             runner = Runner(
@@ -385,6 +414,9 @@ async def run_agent_sse(request: RunRequest):
                 role='user',
                 parts=[types.Part(text=user_message)]
             )
+            
+            print(f"🔍 About to call runner.run_async with:")
+            print(f"   user_id={request.user_id}, session_id={request.session_id}")
             
             # Stream events from agent execution
             async for event in runner.run_async(
