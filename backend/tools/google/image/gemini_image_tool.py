@@ -72,7 +72,7 @@ def _load_image(image_path: str) -> Image.Image:
 
 def _save_image(image: Image.Image, filename: str) -> Path:
     """Save PIL image to file."""
-    file_path = "/tmp/images_generated/" + filename
+    file_path = "/tmp/generated_images/" + filename
     image.save(file_path)
     logger.info(f"Image saved successfully at: {file_path}")
     return file_path
@@ -120,11 +120,11 @@ def _generate_filename(generation_type: str, custom_filename: Optional[str] = No
 def gemini_image_generator(
     prompt: str,
     generation_type: str = "text_to_image",
-    # input_image_path: Optional[str] = None,
-    # additional_image_paths: Optional[str] = None,
-    # model_id: str = "gemini-2.5-flash-image-preview",
-    # temperature: float = 0.4,
-    # output_filename: Optional[str] = None,
+    input_image_path: Optional[str] = None,
+    additional_image_paths: Optional[str] = None,
+    model_id: str = "gemini-2.5-flash-image-preview",
+    temperature: float = 0.4,
+    output_filename: Optional[str] = None,
 ) -> str:
     """
     Generate and edit images using Google Gemini AI.
@@ -158,11 +158,6 @@ def gemini_image_generator(
         str: JSON string with image paths and metadata
     """
     try:
-        model_id = "gemini-2.5-flash-image-preview"
-        temperature = 0.4
-        input_image_path = None
-        additional_image_paths = None
-        output_filename = None
         logger.info(f"Starting Gemini image generation - Type: {generation_type}, Model: {model_id}")
         
         # Get API key from environment
@@ -171,7 +166,7 @@ def gemini_image_generator(
             raise ValueError("GOOGLE_API_KEY environment variable is required")
         
         # Validate parameters
-        # _validate_gemini_params(generation_type, model_id, temperature, input_image_path)
+        _validate_gemini_params(generation_type, model_id, temperature, input_image_path)
         
         # Initialize Google Gemini client
         gemini_client = genai.Client(api_key=api_key)
@@ -249,23 +244,23 @@ def gemini_image_generator(
         }
         _save_metadata(metadata, file_path)
         
-        result_info = {
-            "success": True,
-            "image_url": str(file_path),
-            # "main_image_path": str(file_path),
-            # "main_image_filename": file_path.name,
-            # "main_image_url": str(file_path),
-            # "additional_images": additional_paths,
-            # "text_responses": text_responses,
-            # "total_images": len(generated_images),
-            # "generation_type": generation_type,
-            # "model_used": model_id,
-            # "prompt": prompt,
-            # "metadata_path": str(file_path.with_suffix('.json'))
-        }
+        # result_info = {
+        #     "success": True,
+        #     "main_image_path": str(file_path),
+        #     "main_image_filename": file_path.name,
+        #     "main_image_url": f"/api/v1/images/serve/{file_path.name}",
+        #     "additional_images": additional_paths,
+        #     "text_responses": text_responses,
+        #     "total_images": len(generated_images),
+        #     "generation_type": generation_type,
+        #     "model_used": model_id,
+        #     "prompt": prompt,
+        #     "metadata_path": str(file_path.with_suffix('.json'))
+        # }
+        return str(file_path)
         
-        logger.info(f"Successfully generated {len(generated_images)} images. Main image: {file_path}")
-        return json.dumps(result_info, indent=2)
+        # logger.info(f"Successfully generated {len(generated_images)} images. Main image: {file_path}")
+        # return json.dumps(result_info, indent=2)
         
     except Exception as e:
         logger.error(f"Error generating image with Gemini: {e}")
@@ -281,9 +276,9 @@ def gemini_image_generator(
 
 def gemini_text_to_image(
     prompt: str,
-    # model_id: str = "gemini-2.5-flash-image-preview",
-    # temperature: float = 0.4,
-    # output_filename: Optional[str] = None,
+    model_id: str = "gemini-2.5-flash-image-preview",
+    temperature: float = 0.4,
+    output_filename: Optional[str] = None,
 ) -> str:
     """
     Simple text-to-image generation using Google Gemini AI.
@@ -300,9 +295,9 @@ def gemini_text_to_image(
     return gemini_image_generator(
         prompt=prompt,
         generation_type="text_to_image",
-        # model_id=model_id,
-        # temperature=temperature,
-        # output_filename=output_filename
+        model_id=model_id,
+        temperature=temperature,
+        output_filename=output_filename
     )
 
 

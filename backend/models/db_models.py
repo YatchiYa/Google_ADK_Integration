@@ -16,9 +16,10 @@ class AgentDB(Base):
     __tablename__ = "new_agent"
     
     agent_id = Column(String(255), primary_key=True)
+    user_id = Column(String(255), nullable=False, default="default_user")
     name = Column(String(255), nullable=False)
     description = Column(Text)
-    agent_type = Column(String(50), default="regular")  # regular, SequentialAgent, ParallelAgent
+    agent_type = Column(String(50), default="regular")  # regular, SequentialAgent, ParallelAgent, TeamAgent, react
     
     # Persona information (stored as JSON)
     persona_name = Column(String(255))
@@ -58,6 +59,7 @@ class ConversationDB(Base):
     __tablename__ = "new_conversations"
     
     conversation_id = Column(String(255), primary_key=True)
+    user_id = Column(String(255), nullable=False, default="default_user")
     agent_id = Column(String(255), ForeignKey("new_agent.agent_id"), nullable=False)
     session_id = Column(String(255))
     title = Column(String(500))
@@ -84,6 +86,7 @@ class MessageDB(Base):
     __tablename__ = "new_messages"
     
     message_id = Column(String(255), primary_key=True)
+    user_id = Column(String(255), nullable=False, default="default_user")
     conversation_id = Column(String(255), ForeignKey("new_conversations.conversation_id"), nullable=False)
     
     # Message content

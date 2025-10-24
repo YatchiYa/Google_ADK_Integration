@@ -58,6 +58,8 @@ class AgentInfo:
     is_active: bool = True
     version: str = "1.0.0"
     metadata: Dict[str, Any] = field(default_factory=dict)
+    planner: Optional[str] = None
+    sub_agents: Optional[List[str]] = None
 
 
 class AgentManager:
@@ -232,11 +234,11 @@ Original persona: {persona.description}"""
                 )
                 
                 # Store sub-agent information in metadata
-                agent_info.metadata["agent_type"] = "SequentialCoordinator"
+                agent_info.metadata["agent_type"] = "SequentialAgent"
                 agent_info.metadata["sub_agents"] = sub_agents
                 agent_info.metadata["workflow_pattern"] = "sequential"
                 agent_info.metadata["coordination_method"] = "agent_tools"
-                logger.info(f"Created Sequential Coordinator with {len(sub_agents)} sub-agents: {sub_agents}")
+                logger.info(f"Created Sequential Agent with {len(sub_agents)} sub-agents: {sub_agents}")
                 
             elif agent_type == "ParallelAgent":
                 # Create Parallel Coordinator using AgentTool delegation (more reliable)
@@ -280,22 +282,23 @@ Original persona: {persona.description}"""
                 )
                 
                 # Store sub-agent information in metadata
-                agent_info.metadata["agent_type"] = "ParallelCoordinator"
+                agent_info.metadata["agent_type"] = "ParallelAgent"
                 agent_info.metadata["sub_agents"] = sub_agents
                 agent_info.metadata["workflow_pattern"] = "parallel"
                 agent_info.metadata["coordination_method"] = "agent_tools"
-                logger.info(f"Created Parallel Coordinator with {len(sub_agents)} sub-agents: {sub_agents}")
+                logger.info(f"Created Parallel Agent with {len(sub_agents)} sub-agents: {sub_agents}")
                 
             else:
                 # Create regular LLM agent with optional planner
                 planner_instance = None
                 
-                if planner == "PlanReActPlanner":
+                if agent_type == "PlanReActPlanner":
                     from google.adk.planners import PlanReActPlanner
                     planner_instance = PlanReActPlanner()
                     logger.info(f"Adding PlanReActPlanner to agent {agent_id} - enables structured PLANNING->ACTION->REASONING->FINAL_ANSWER format")
                     
-                elif planner == "BuiltInPlanner":
+                    agent_info.metadata["agent_type"] = "PlanReActPlanner"
+                elif agent_type == "BuiltInPlanner":
                     from google.adk.planners import BuiltInPlanner
                     # Configure thinking budget based on agent complexity
                     thinking_budget = 512  # Default
@@ -310,7 +313,8 @@ Original persona: {persona.description}"""
                     )
                     logger.info(f"Adding BuiltInPlanner to agent {agent_id} with thinking_budget={thinking_budget}")
                     
-                elif planner == "BuiltInPlannerAdvanced":
+                    agent_info.metadata["agent_type"] = "BuiltInPlanner"
+                elif agent_type == "BuiltInPlannerAdvanced":
                     from google.adk.planners import BuiltInPlanner
                     # Advanced configuration for complex reasoning tasks
                     planner_instance = BuiltInPlanner(
@@ -320,10 +324,12 @@ Original persona: {persona.description}"""
                         )
                     )
                     logger.info(f"Adding Advanced BuiltInPlanner to agent {agent_id} with extended thinking capacity")
+                    
+                    agent_info.metadata["agent_type"] = "BuiltInPlannerAdvanced"
                 
                 # Enhance instruction for planner-enabled agents
                 if planner_instance:
-                    if planner == "PlanReActPlanner":
+                    if agent_type == "PlanReActPlanner":
                         enhanced_instruction = f"""{instruction}
 
 IMPORTANT: You MUST follow the ReAct methodology structure in your responses:
@@ -396,8 +402,9 @@ You have advanced thinking capabilities. Use your internal reasoning to plan and
             if self.db_service:
                 try:
                     # Store agent type and planner in metadata
-                    agent_info.metadata["agent_type"] = agent_type or "regular"
+                    agent_info.metadata["agent_type"] = agent_type
                     agent_info.metadata["planner"] = planner
+                    agent_info.planner = agent_type
                     agent_info.metadata["output_key"] = output_key
                     if sub_agents:
                         agent_info.metadata["sub_agents"] = sub_agents
@@ -557,7 +564,7 @@ You have advanced thinking capabilities. Use your internal reasoning to plan and
                         persona=agent_info.persona,
                         config=agent_info.config,
                         tools=agent_info.tools,
-                        planner=agent_info.metadata.get("planner"),
+                        planner=agent_info.planner,
                         agent_type=agent_info.metadata.get("agent_type"),
                         sub_agents=agent_info.metadata.get("sub_agents", [])
                     )
@@ -836,6 +843,8 @@ You have advanced thinking capabilities. Use your internal reasoning to plan and
                 "tools": agent_info.tools,
                 "version": agent_info.version,
                 "metadata": agent_info.metadata,
+                "planner": agent_info.planner,
+                "sub_agents": agent_info.sub_agents,
                 "exported_at": datetime.now().isoformat()
             }
 
@@ -873,7 +882,9 @@ You have advanced thinking capabilities. Use your internal reasoning to plan and
                 persona=persona,
                 config=config,
                 tools=config_data.get("tools", []),
-                agent_id=config_data.get("agent_id")
+                agent_id=config_data.get("agent_id"),
+                planner=config_data.get("planner"),
+                sub_agents=config_data.get("sub_agents", []),
             )
             
             logger.info(f"Imported agent configuration: {agent_id}")
@@ -1135,7 +1146,9 @@ Use this structured approach for complex queries that require multiple steps or 
                         usage_count=db_agent.usage_count,
                         is_active=db_agent.is_active,
                         version=db_agent.version,
-                        metadata=db_agent.agent_metadata or {}
+                        metadata=db_agent.agent_metadata or {},
+                        planner=db_agent.planner,
+                        sub_agents=db_agent.sub_agents or [],
                     )
                     
                     # Store in memory (but don't create ADK instance yet - lazy loading)
@@ -1182,7 +1195,7 @@ Use this structured approach for complex queries that require multiple steps or 
                 },
                 "tools": agent_info.tools,
                 "sub_agents": agent_info.metadata.get("sub_agents"),
-                "planner": agent_info.metadata.get("planner"),
+                "planner": agent_info.planner,
                 "output_key": agent_info.metadata.get("output_key"),
                 "version": agent_info.version,
                 "is_active": agent_info.is_active,
@@ -1254,7 +1267,9 @@ Use this structured approach for complex queries that require multiple steps or 
                         usage_count=db_agent.usage_count,
                         is_active=db_agent.is_active,
                         version=db_agent.version,
-                        metadata=db_agent.agent_metadata or {}
+                        metadata=db_agent.agent_metadata or {},
+                        planner=db_agent.planner,
+                        sub_agents=db_agent.sub_agents or [],
                     )
                     
                     self._agents[agent_id] = agent_info
@@ -1292,7 +1307,9 @@ Use this structured approach for complex queries that require multiple steps or 
                 description=agent_info.description,
                 instruction=instruction,
                 tools=agent_tools,
-                generate_content_config=generate_config
+                generate_content_config=generate_config,
+                planner=agent_info.planner,
+                sub_agents=agent_info.sub_agents,
             )
             
             self._agent_instances[agent_id] = adk_agent

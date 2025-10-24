@@ -468,199 +468,161 @@ class ToolManager:
     def _register_builtin_tools(self):
         """Register built-in tools"""
         try:
-            # Load memory tool
-            def load_memory_tool(query: str) -> str:
-                """Load relevant information from memory"""
-                return f"Memory search results for: {query}"
-            
+        
+            from google.adk.tools import google_search  
             self.register_tool(
-                name="load_memory",
-                tool=load_memory_tool,
-                description="Search and load relevant information from memory",
-                category="memory",
+                name="google_search",
+                tool=google_search,
+                description="Google ADK built-in Google Search tool. Search the web using Google Search grounding.",
+                category="search",
+                author="google_adk"
+            )
+            logger.info("Registered Google ADK built-in google_search")
+            
+            from tools.utils.calculator import custom_calculator
+            self.register_tool(
+                name="custom_calculator",
+                tool=custom_calculator,
+                description="Safe calculator for mathematical expressions. Supports basic arithmetic operations.",
+                category="utility",
+                author="system"
+            ) 
+
+            from tools.api.product_hunt_api import product_hunt_search
+            self.register_tool(
+                name="product_hunt_search",
+                tool=product_hunt_search,
+                description="Search Product Hunt for products, posts, and collections. Supports query types: search, posts, collections.",
+                category="api",
                 author="system"
             )
             
-                # Register Google ADK built-in tools
-            try:
-                # Try to import Google ADK built-in tools 
-                from google.adk.tools import google_search  
-                self.register_tool(
-                    name="google_search",
-                    tool=google_search,
-                    description="Google ADK built-in Google Search tool. Search the web using Google Search grounding.",
-                    category="search",
-                    author="google_adk"
-                )
-                logger.info("Registered Google ADK built-in google_search")
-                
-                # Register our custom tools
-                from tools.google_adk_tools import (
-                    custom_calculator, 
-                    text_analyzer,
-                    product_hunt_search,
-                    yahoo_finance_data,
-                    call_document_rag_code_civile_algerian,
-                    call_document_rag_code_civile_algerian_streaming,
-                    llamaindex_document_rag
-                )
-                
-                # Register Gemini image tools
-                from tools.gemini_image_tool import (
-                    gemini_image_generator,
-                    gemini_text_to_image,
-                    gemini_image_editor
-                )
-                
-                # Register Meta publisher tools
-                from tools.meta_publisher_tool import (
-                    meta_publish_content,
-                    meta_publish_text,
-                    meta_publish_image,
-                    meta_publish_text_and_image,
-                    meta_get_account_info,
-                    update_meta_tokens
-                )
-                
-                self.register_tool(
-                    name="custom_calculator",
-                    tool=custom_calculator,
-                    description="Safe calculator for mathematical expressions. Supports basic arithmetic operations.",
-                    category="utility",
-                    author="system"
-                )
-                
-                self.register_tool(
-                    name="text_analyzer",
-                    tool=text_analyzer,
-                    description="Analyze text for word count, sentiment, and other metrics.",
-                    category="analysis",
-                    author="system"
-                )
-                
-                self.register_tool(
-                    name="product_hunt_search",
-                    tool=product_hunt_search,
-                    description="Search Product Hunt for products, posts, and collections. Supports query types: search, posts, collections.",
-                    category="api",
-                    author="system"
-                )
-                
-                self.register_tool(
-                    name="yahoo_finance_data",
-                    tool=yahoo_finance_data,
-                    description="Get real-time and historical financial data from Yahoo Finance. Supports stocks, crypto, and other symbols.",
-                    category="finance",
-                    author="system"
-                )
+            from tools.finance.yahoo_finance import yahoo_finance_data
+            self.register_tool(
+                name="yahoo_finance_data",
+                tool=yahoo_finance_data,
+                description="Get real-time and historical financial data from Yahoo Finance. Supports stocks, crypto, and other symbols.",
+                category="finance",
+                author="system"
+            )
 
-                # Register non-streaming version (for backward compatibility)
-                self.register_tool(
-                    name="call_document_rag_code_civile_algerian",
-                    tool=call_document_rag_code_civile_algerian,
-                    description="Search and retrieve information from the Algerian Civil Code using RAG (Retrieval-Augmented Generation). Provides expert legal analysis and context from Algerian civil law documents.",
-                    category="document_rag",
-                    author="system"
-                )
-                
-                self.register_tool(
-                    name="code_civile_via_rag",
-                    tool=llamaindex_document_rag,
-                    description="Search and retrieve information from the Algerian Civil Code using RAG (Retrieval-Augmented Generation). Provides expert legal analysis and context from Algerian civil law documents.",
-                    category="document_rag",
-                    author="system"
-                )
-                
-                # Register ASYNC version - collects streaming chunks and returns complete result
-                # Note: ADK AsyncGenerator only works for live video/audio, not regular tools
-                self.register_tool(
-                    name="call_document_rag_code_civile_algerian_streaming",
-                    tool=call_document_rag_code_civile_algerian_streaming,
-                    description="[ASYNC] Search and retrieve information from the Algerian Civil Code using RAG. This async version collects streaming chunks from the API for faster response. Returns complete results with references.",
-                    category="document_rag",
-                    author="system",
-                    metadata={"async": True, "base_tool": "call_document_rag_code_civile_algerian"}
-                )
-                logger.info("Registered async RAG tool: call_document_rag_code_civile_algerian_streaming")
-                
-                # Register Gemini image generation tools
-                self.register_tool(
-                    name="gemini_image_generator",
-                    tool=gemini_image_generator,
-                    description="Advanced image generation and editing using Google Gemini AI. Supports text-to-image, image editing, restoration, colorization, and iterative editing.",
-                    category="ai_image",
-                    author="system"
-                )
-                
-                self.register_tool(
-                    name="gemini_text_to_image",
-                    tool=gemini_text_to_image,
-                    description="Simple text-to-image generation using Google Gemini AI. Generate images from text descriptions.",
-                    category="ai_image",
-                    author="system"
-                )
-                
-                self.register_tool(
-                    name="gemini_image_editor",
-                    tool=gemini_image_editor,
-                    description="Edit existing images using Google Gemini AI. Modify images with text prompts.",
-                    category="ai_image",
-                    author="system"
-                )
-                
-                # Register Meta publisher tools
-                self.register_tool(
-                    name="meta_publish_content",
-                    tool=meta_publish_content,
-                    description="Universal Meta publishing tool for Facebook and Instagram. Supports text, images, and combined content.",
-                    category="social_media",
-                    author="system"
-                )
-                
-                self.register_tool(
-                    name="meta_publish_text",
-                    tool=meta_publish_text,
-                    description="Publish text content to Facebook (Instagram requires images).",
-                    category="social_media",
-                    author="system"
-                )
-                
-                self.register_tool(
-                    name="meta_publish_image",
-                    tool=meta_publish_image,
-                    description="Publish image content to Facebook and Instagram with optional caption.",
-                    category="social_media",
-                    author="system"
-                )
-                
-                self.register_tool(
-                    name="meta_publish_text_and_image",
-                    tool=meta_publish_text_and_image,
-                    description="Publish text with image to Facebook and Instagram.",
-                    category="social_media",
-                    author="system"
-                )
-                
-                self.register_tool(
-                    name="meta_get_account_info",
-                    tool=meta_get_account_info,
-                    description="Get information about configured Meta accounts (Facebook page and Instagram account).",
-                    category="social_media",
-                    author="system"
-                )
-                
-                self.register_tool(
-                    name="update_meta_tokens",
-                    tool=update_meta_tokens,
-                    description="Update Meta authentication tokens from frontend Facebook login.",
-                    category="social_media",
-                    author="system"
-                )
-                
-                logger.info("Registered custom tools including Product Hunt, Yahoo Finance, Gemini Image, and Meta Publisher tools")
-                
-            except ImportError as e:
-                logger.warning(f"Could not register tools: {e}")
+            from tools.utils.file_reader import file_reader
+            self.register_tool(
+                name="file_reader",
+                tool=file_reader,
+                description="Read and return file contents. Supports reading text files, Markdown, JSON, CSV, and log files.",
+                category="utility",
+                author="system"
+            ) 
+            
+            from tools.google.image.gemini_image_tool import gemini_image_generator
+            self.register_tool(
+                name="gemini_image_generator",
+                tool=gemini_image_generator,
+                description="Advanced image generation and editing using Google Gemini AI. Supports text-to-image, image editing, restoration, colorization, and iterative editing.",
+                category="ai_image",
+                author="system"
+            )
+            
+            from tools.google.image.gemini_image_tool import gemini_text_to_image
+            self.register_tool(
+                name="gemini_text_to_image",
+                tool=gemini_text_to_image,
+                description="Simple text-to-image generation using Google Gemini AI. Generate images from text descriptions.",
+                category="ai_image",
+                author="system"
+            )
+            
+            from tools.google.image.gemini_image_tool import gemini_image_editor
+            self.register_tool(
+                name="gemini_image_editor",
+                tool=gemini_image_editor,
+                description="Edit existing images using Google Gemini AI. Modify images with text prompts.",
+                category="ai_image",
+                author="system"
+            )
+            
+            # Register Meta publisher tools
+            from tools.meta.meta_publisher_tool import meta_publish_content
+            self.register_tool(
+                name="meta_publish_content",
+                tool=meta_publish_content,
+                description="Universal Meta publishing tool for Facebook and Instagram. Supports text, images, and combined content.",
+                category="social_media",
+                author="system"
+            )
+            
+            from tools.meta.meta_publisher_tool import meta_publish_text
+            self.register_tool(
+                name="meta_publish_text",
+                tool=meta_publish_text,
+                description="Publish text content to Facebook (Instagram requires images).",
+                category="social_media",
+                author="system"
+            )
+            
+            from tools.meta.meta_publisher_tool import meta_publish_image
+            self.register_tool(
+                name="meta_publish_image",
+                tool=meta_publish_image,
+                description="Publish image content to Facebook and Instagram with optional caption.",
+                category="social_media",
+                author="system"
+            )
+            
+            from tools.meta.meta_publisher_tool import meta_publish_text_and_image
+            self.register_tool(
+                name="meta_publish_text_and_image",
+                tool=meta_publish_text_and_image,
+                description="Publish text with image to Facebook and Instagram.",
+                category="social_media",
+                author="system"
+            )
+            
+            from tools.meta.meta_publisher_tool import meta_get_account_info
+            self.register_tool(
+                name="meta_get_account_info",
+                tool=meta_get_account_info,
+                description="Get information about configured Meta accounts (Facebook page and Instagram account).",
+                category="social_media",
+                author="system"
+            )
+            
+            from tools.meta.meta_publisher_tool import update_meta_tokens
+            self.register_tool(
+                name="update_meta_tokens",
+                tool=update_meta_tokens,
+                description="Update Meta authentication tokens from frontend Facebook login.",
+                category="social_media",
+                author="system"
+            )
+
+
+            # Legal tools
+            from tools.legal_domain.rag.light_rag_experimental import annuaire_du_code_algerien
+            self.register_tool(
+                name="annuaire_du_code_algerien",
+                tool=annuaire_du_code_algerien,
+                description="Search and retrieve information from the Algerian law Code. Provides verified information, verified laws and articles from Algerian civil law documents.",
+                category="document_rag",
+                author="system"
+            )
+            from tools.legal_domain.rag.light_rag_experimental import annuaire_du_code_algerien_avancee
+            self.register_tool(
+                name="annuaire_du_code_algerien_avancee",
+                tool=annuaire_du_code_algerien_avancee,
+                description="Search and retrieve information from the Algerian law Code. Provides verified information, verified laws and articles from Algerian civil law documents.",
+                category="document_rag",
+                author="system"
+            )
+            from tools.legal_domain.rag.llamaindex_retrieval import annuaire_de_lois_civile_algerien
+            self.register_tool(
+                name="annuaire_de_lois_civile_algerien",
+                tool=annuaire_de_lois_civile_algerien,
+                description="Search and retrieve information from the Algerian law Code. Provides verified information, verified laws and articles from Algerian civil law documents.",
+                category="document_rag",
+                author="system"
+            )
             
             logger.info("Registered built-in tools")
             
